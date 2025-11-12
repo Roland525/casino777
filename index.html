@@ -23,9 +23,7 @@
   <div id="casino" class="container hidden">
     <header class="topbar">
       <div class="brand">🎲 Lucky Box</div>
-      <div class="pill">
-        Привет, <b id="userDisplay">—</b>! Баланс: <b id="balance">0</b> 💰
-      </div>
+      <div class="pill">Привет, <b id="userDisplay">—</b>! Баланс: <b id="balance">0</b> 💰</div>
       <button class="btn danger" id="logoutBtn">🚪 Выйти</button>
     </header>
 
@@ -114,274 +112,289 @@
     </section>
   </div>
 
-  <!-- JS -->
   <script>
-    "use strict";
+  "use strict";
 
-    // ====== Auth state ======
-    var $auth = document.getElementById("authPanel");
-    var $casino = document.getElementById("casino");
-    var $authMsg = document.getElementById("authMsg");
-    var $nick = document.getElementById("nickname");
-    var $user = document.getElementById("userDisplay");
-    var $bal = document.getElementById("balance");
-    var currentUser = null;
+  // ====== Auth state ======
+  var $auth = document.getElementById("authPanel");
+  var $casino = document.getElementById("casino");
+  var $authMsg = document.getElementById("authMsg");
+  var $nick = document.getElementById("nickname");
+  var $user = document.getElementById("userDisplay");
+  var $bal = document.getElementById("balance");
+  var currentUser = null;
 
-    function updateBalanceUI(){
-      $bal.textContent = currentUser.balance;
-      $bal.parentElement.classList.add("shine");
-      setTimeout(function(){ $bal.parentElement.classList.remove("shine"); }, 600);
-    }
-    function openCasino(){
-      $auth.classList.add("hidden");
-      $casino.classList.remove("hidden");
-      document.querySelector('[data-tab="tab-slots"]').click();
-      $user.textContent = currentUser.name;
-      updateBalanceUI();
-    }
+  function updateBalanceUI(){
+    $bal.textContent = currentUser.balance;
+    $bal.parentElement.classList.add("shine");
+    setTimeout(function(){ $bal.parentElement.classList.remove("shine"); }, 600);
+  }
+  function openCasino(){
+    $auth.classList.add("hidden");
+    $casino.classList.remove("hidden");
+    document.querySelector('[data-tab="tab-slots"]').click();
+    $user.textContent = currentUser.name;
+    updateBalanceUI();
+  }
 
-    async function api(path, body){
-      var res = await fetch(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body || {})
-      });
-      return res.json();
-    }
+  async function api(path, body){
+    var res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    });
+    return res.json();
+  }
 
-    // ====== Login / Register ======
-    document.getElementById("loginBtn").addEventListener("click", async function(){
-      var nick = $nick.value.trim();
-      if(!nick){ $authMsg.textContent="Введите ник"; return; }
-      $authMsg.textContent="Вход...";
+  // ====== вход / регистрация ======
+  document.getElementById("loginBtn").addEventListener("click", async function(){
+    var nick = $nick.value.trim();
+    if(!nick){ $authMsg.textContent="Введите ник"; return; }
+    $authMsg.textContent="Вход...";
+    try{
       var data = await api("/api/login", { name: nick });
-      if(!data.ok){ $authMsg.textContent=data.error||"Ошибка"; return; }
-      currentUser = data.user;
-      openCasino();
-    });
-    document.getElementById("registerBtn").addEventListener("click", async function(){
-      var nick = $nick.value.trim();
-      if(!nick){ $authMsg.textContent="Введите ник"; return; }
-      $authMsg.textContent="Регистрация...";
+      if (data.error){ $authMsg.textContent=data.error; return; }
+      if (data.ok && data.user){
+        currentUser = data.user;
+        openCasino();
+      } else {
+        $authMsg.textContent = "Ошибка входа";
+      }
+    }catch(e){
+      $authMsg.textContent="Ошибка сервера";
+    }
+  });
+
+  document.getElementById("registerBtn").addEventListener("click", async function(){
+    var nick = $nick.value.trim();
+    if(!nick){ $authMsg.textContent="Введите ник"; return; }
+    $authMsg.textContent="Регистрация...";
+    try{
       var data = await api("/api/register", { name: nick });
-      if(!data.ok){ $authMsg.textContent=data.error||"Ошибка"; return; }
-      currentUser = data.user;
-      openCasino();
-    });
-    document.getElementById("logoutBtn").addEventListener("click", function(){
-      location.reload();
-    });
-
-    // ====== Tabs ======
-    document.querySelectorAll(".tab-btn").forEach(function(btn){
-      btn.addEventListener("click", function(){
-        document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.remove("active"); });
-        btn.classList.add("active");
-        document.querySelectorAll("section.card").forEach(function(s){ s.classList.add("hidden"); });
-        document.getElementById(btn.dataset.tab).classList.remove("hidden");
-      });
-    });
-
-    // ====== SLOTS (client UI only; result from server) ======
-    var symbols = ["🍒","🍋","⭐","🔔","🍀","7️⃣","💎","🍉"];
-    var $reels = document.getElementById("reels");
-    var reelEls = [];
-
-    function makeStrip(result){
-      var strip = document.createElement("div");
-      strip.className = "strip";
-      strip.style.top = "-360px";
-      for (var i=0;i<3;i++){
-        var c=document.createElement("div");
-        c.className="cell";
-        c.textContent=result[i];
-        strip.appendChild(c);
+      if (data.error){ $authMsg.textContent=data.error; return; }
+      if (data.ok && data.user){
+        currentUser = data.user;
+        openCasino();
+      } else {
+        $authMsg.textContent = "Ошибка регистрации";
       }
-      for (var j=0;j<3;j++){
-        var c2=document.createElement("div");
-        c2.className="cell";
-        c2.textContent=symbols[Math.floor(Math.random()*symbols.length)];
-        strip.appendChild(c2);
-      }
-      return strip;
+    }catch(e){
+      $authMsg.textContent="Ошибка сервера";
     }
-    function initSlotsUI(){
-      $reels.innerHTML="";
-      reelEls=[];
-      for (var i=0;i<5;i++){
-        var reel=document.createElement("div");
-        reel.className="reel";
-        var res=[0,1,2].map(function(){ return symbols[Math.floor(Math.random()*symbols.length)]; });
-        reel.appendChild(makeStrip(res));
-        $reels.appendChild(reel);
-        reelEls.push(reel);
-      }
-    }
-    initSlotsUI();
+  });
 
-    var slotMsg = document.getElementById("slotMsg");
-    document.getElementById("spin").addEventListener("click", async function(){
-      if(!currentUser) return;
-      var reelsWrap=document.querySelector(".reels");
-      reelsWrap.classList.add("shake");
-      setTimeout(function(){ reelsWrap.classList.remove("shake"); },900);
-      slotMsg.textContent="Крутим…";
+  document.getElementById("logoutBtn").addEventListener("click", function(){
+    location.reload();
+  });
 
-      // ask server
-      var data = await api("/api/play", { name: currentUser.name, game: "slots", action: "spin" });
-      if(!data.ok){ slotMsg.textContent=data.error||"Ошибка"; return; }
-      currentUser.balance = data.balance;
-
-      // simple animation end
-      setTimeout(function(){
-        var win=data.result.win||0;
-        slotMsg.textContent = win ? ("🎉 Выигрыш +" + win) : "Проигрыш";
-        updateBalanceUI();
-      }, 600);
+  // ====== Tabs ======
+  document.querySelectorAll(".tab-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      document.querySelectorAll("section.card").forEach(function(s){ s.classList.add("hidden"); });
+      document.getElementById(btn.dataset.tab).classList.remove("hidden");
     });
+  });
 
-    // ====== BLACKJACK ======
-    var $pHand=document.getElementById("playerHand");
-    var $dHand=document.getElementById("dealerHand");
-    var $bjMsg=document.getElementById("bjMsg");
-    var $bjStart=document.getElementById("bjStart");
-    var $hit=document.getElementById("hit");
-    var $stand=document.getElementById("stand");
+  // ====== SLOTS (UI) ======
+  var symbols = ["🍒","🍋","⭐","🔔","🍀","7️⃣","💎","🍉"];
+  var $reels = document.getElementById("reels");
+  var reelEls = [];
 
-    function renderBJ(state){
-      // state: {player, dealer, totals}
-      $pHand.innerHTML=""; $dHand.innerHTML="";
-      (state.player||[]).forEach(function(c){ $pHand.appendChild(cardEl(c)); });
-      (state.dealer||[]).forEach(function(c){ $dHand.appendChild(cardEl(c)); });
+  function makeStrip(result){
+    var strip = document.createElement("div");
+    strip.className = "strip";
+    strip.style.top = "-360px";
+    for (var i=0;i<3;i++){
+      var c=document.createElement("div");
+      c.className="cell";
+      c.textContent=result[i];
+      strip.appendChild(c);
     }
-    function cardEl(card){
-      if(card==="🂠"){
-        var d=document.createElement("div");
-        d.className="card-face";
-        d.style.background="#1b2442"; d.style.borderColor="rgba(255,255,255,.2)"; d.style.color="#1b2442";
-        d.innerHTML='<div class="rank">?</div><div class="suit">?</div>';
-        return d;
-      }
-      var r=card.slice(0,-1), s=card.slice(-1);
+    for (var j=0;j<3;j++){
+      var c2=document.createElement("div");
+      c2.className="cell";
+      c2.textContent=symbols[Math.floor(Math.random()*symbols.length)];
+      strip.appendChild(c2);
+    }
+    return strip;
+  }
+  function initSlotsUI(){
+    $reels.innerHTML=""; reelEls=[];
+    for (var i=0;i<5;i++){
+      var reel=document.createElement("div");
+      reel.className="reel";
+      var res=[0,1,2].map(function(){ return symbols[Math.floor(Math.random()*symbols.length)]; });
+      reel.appendChild(makeStrip(res));
+      $reels.appendChild(reel);
+      reelEls.push(reel);
+    }
+  }
+  initSlotsUI();
+
+  var slotMsg = document.getElementById("slotMsg");
+  document.getElementById("spin").addEventListener("click", async function(){
+    if(!currentUser) return;
+    var reelsWrap=document.querySelector(".reels");
+    reelsWrap.classList.add("shake");
+    setTimeout(function(){ reelsWrap.classList.remove("shake"); },900);
+    slotMsg.textContent="Крутим…";
+
+    var data = await api("/api/play", { name: currentUser.name, game: "slots", action: "spin" });
+    if(!data.ok){ slotMsg.textContent=data.error||"Ошибка"; return; }
+    currentUser.balance = data.balance;
+
+    setTimeout(function(){
+      var win=data.result.win||0;
+      slotMsg.textContent = win ? ("🎉 Выигрыш +" + win) : "Проигрыш";
+      updateBalanceUI();
+    }, 600);
+  });
+
+  // ====== BLACKJACK ======
+  var $pHand=document.getElementById("playerHand");
+  var $dHand=document.getElementById("dealerHand");
+  var $bjMsg=document.getElementById("bjMsg");
+  var $bjStart=document.getElementById("bjStart");
+  var $hit=document.getElementById("hit");
+  var $stand=document.getElementById("stand");
+
+  function cardEl(card){
+    if(card==="🂠"){
       var d=document.createElement("div");
-      d.className="card-face"+((s==="♥"||s==="♦")?" red":"");
-      d.innerHTML='<div class="rank">'+r+'</div><div class="suit">'+s+'</div>';
-      d.style.animation="deal .28s ease";
+      d.className="card-face";
+      d.style.background="#1b2442"; d.style.borderColor="rgba(255,255,255,.2)"; d.style.color="#1b2442";
+      d.innerHTML='<div class="rank">?</div><div class="suit">?</div>';
       return d;
     }
+    var r=card.slice(0,-1), s=card.slice(-1);
+    var d=document.createElement("div");
+    d.className="card-face"+((s==="♥"||s==="♦")?" red":"");
+    d.innerHTML='<div class="rank">'+r+'</div><div class="suit">'+s+'</div>';
+    return d;
+  }
+  function renderBJ(state){
+    $pHand.innerHTML=""; $dHand.innerHTML="";
+    (state.player||[]).forEach(function(c){ $pHand.appendChild(cardEl(c)); });
+    (state.dealer||[]).forEach(function(c){ $dHand.appendChild(cardEl(c)); });
+  }
 
-    $bjStart.addEventListener("click", async function(){
-      if(!currentUser) return;
-      $bjMsg.textContent="Раздача...";
-      var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "start" });
-      if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
-      currentUser.balance = data.balance;
-      renderBJ(data.state);
-      $bjMsg.textContent="Ваш ход: Взять или Хватит";
-      $hit.disabled=false; $stand.disabled=false;
+  $bjStart.addEventListener("click", async function(){
+    if(!currentUser) return;
+    $bjMsg.textContent="Раздача...";
+    var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "start" });
+    if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
+    currentUser.balance = data.balance;
+    renderBJ(data.state);
+    $bjMsg.textContent="Ваш ход: Взять или Хватит";
+    $hit.disabled=false; $stand.disabled=false;
+    updateBalanceUI();
+  });
+
+  $hit.addEventListener("click", async function(){
+    var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "hit" });
+    if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
+    renderBJ(data.state);
+    if(data.state.outcome==="bust"){ $bjMsg.textContent="Перебор! Проигрыш."; $hit.disabled=true; $stand.disabled=true; }
+  });
+
+  $stand.addEventListener("click", async function(){
+    var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "stand" });
+    if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
+    currentUser.balance = data.balance;
+    renderBJ(data.state);
+    var win = (data.result && data.result.win) || 0;
+    $bjMsg.textContent = win ? ("Победа! +" + (win-200)) : "Проигрыш";
+    $hit.disabled=true; $stand.disabled=true; updateBalanceUI();
+  });
+
+  // ====== ROULETTE ======
+  var order=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+  var reds=new Set([32,19,21,25,34,27,36,30,23,5,16,1,14,9,18,7,12,3]);
+  var seg=360/order.length;
+  var $wheel=document.getElementById("wheel");
+  var $roulMsg=document.getElementById("roulMsg");
+  var $pickColor=document.getElementById("pickColor");
+  var $pointer=document.getElementById("pointer");
+
+  function spinToAngle(angle){
+    var turns=6+Math.floor(Math.random()*4);
+    var rot=turns*360 + angle;
+    $wheel.style.transition="transform 3.2s cubic-bezier(.18,.75,.2,1)";
+    $wheel.style.transform="rotate("+rot+"deg)";
+  }
+
+  document.getElementById("spinRoulette").addEventListener("click", async function(){
+    if(!currentUser) return;
+    $roulMsg.textContent="Вращение…";
+    var data = await api("/api/play", { name: currentUser.name, game: "roulette", action: "spin", pick: $pickColor.value });
+    if(!data.ok){ $roulMsg.textContent=data.error||"Ошибка"; return; }
+    currentUser.balance = data.balance;
+    if(data.result && typeof data.result.angle==="number"){ spinToAngle(data.result.angle); }
+    setTimeout(function(){
+      var r=data.result; var win=r.win||0;
+      $pointer.classList.add("pointer-tick"); setTimeout(function(){ $pointer.classList.remove("pointer-tick"); }, 500);
+      $roulMsg.textContent="Выпало "+r.num+" ("+r.color+"). "+(win?("Выигрыш +"+win):"Проигрыш.");
       updateBalanceUI();
-    });
+    }, 3300);
+  });
 
-    $hit.addEventListener("click", async function(){
-      var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "hit" });
-      if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
-      renderBJ(data.state);
-      if(data.state.outcome==="bust"){ $bjMsg.textContent="Перебор! Проигрыш."; $hit.disabled=true; $stand.disabled=true; }
-    });
+  // ====== MINES ======
+  var gridSize=5, totalCells=25;
+  var $minesGrid=document.getElementById("minesGrid");
+  var $minesMsg=document.getElementById("minesMsg");
+  var $minesBet=document.getElementById("minesBet");
+  var $minesCount=document.getElementById("minesCount");
+  var $minesStart=document.getElementById("minesStart");
+  var $minesCash=document.getElementById("minesCashout");
 
-    $stand.addEventListener("click", async function(){
-      var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "stand" });
-      if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
-      currentUser.balance = data.balance;
-      renderBJ(data.state);
-      var win = (data.result && data.result.win) || 0;
-      $bjMsg.textContent = win ? ("Победа! +" + (win-200)) : "Проигрыш";
-      $hit.disabled=true; $stand.disabled=true; updateBalanceUI();
-    });
-
-    // ====== ROULETTE ======
-    var order=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
-    var colors={0:"green"}; var reds=new Set([32,19,21,25,34,27,36,30,23,5,16,1,14,9,18,7,12,3]); order.forEach(function(n){ if(n!==0){ colors[n]=reds.has(n)?"red":"black"; } });
-    var seg=360/order.length; var $wheel=document.getElementById("wheel"); var $roulMsg=document.getElementById("roulMsg"); var $pickColor=document.getElementById("pickColor"); var $pointer=document.getElementById("pointer");
-
-    function spinTo(idx){
-      var target=360-(idx*seg+seg/2);
-      var turns=6+Math.floor(Math.random()*4);
-      var rot=turns*360+target;
-      $wheel.style.transition="transform 3.2s cubic-bezier(.18,.75,.2,1)";
-      $wheel.style.transform="rotate("+rot+"deg)";
+  function resetMinesUI(){
+    $minesGrid.innerHTML="";
+    for(var i=0;i<totalCells;i++){
+      var cell=document.createElement("button");
+      cell.className="mine-cell"; cell.dataset.idx=String(i); cell.textContent="?"; cell.disabled=true;
+      (function(idx,el){ el.addEventListener("click", function(){ onMine(idx, el); }); })(i, cell);
+      $minesGrid.appendChild(cell);
     }
-    document.getElementById("spinRoulette").addEventListener("click", async function(){
-      if(!currentUser) return;
-      $roulMsg.textContent="Вращение…";
-      var data = await api("/api/play", { name: currentUser.name, game: "roulette", action: "spin", pick: $pickColor.value });
-      if(!data.ok){ $roulMsg.textContent=data.error||"Ошибка"; return; }
-      currentUser.balance = data.balance;
-      // крутим на указанный сегмент
-      if(data.result && typeof data.result.index==="number"){ spinTo(data.result.index); }
-      setTimeout(function(){
-        var num=data.result.num, col=data.result.color, win=data.result.win||0;
-        $pointer.classList.add("pointer-tick"); setTimeout(function(){ $pointer.classList.remove("pointer-tick"); }, 500);
-        $roulMsg.textContent = "Выпало "+num+" ("+col+"). " + (win?("Выигрыш +"+win):"Проигрыш.");
-        updateBalanceUI();
-      }, 3300);
-    });
+    $minesMsg.textContent="—"; $minesCash.disabled=true;
+  }
+  resetMinesUI();
 
-    // ====== MINES ======
-    var gridSize=5; var totalCells=gridSize*gridSize;
-    var $minesGrid=document.getElementById("minesGrid"); var $minesMsg=document.getElementById("minesMsg");
-    var $minesBet=document.getElementById("minesBet"); var $minesCount=document.getElementById("minesCount");
-    var $minesStart=document.getElementById("minesStart"); var $minesCash=document.getElementById("minesCashout");
+  function disableGrid(){ Array.prototype.forEach.call($minesGrid.children, function(c){ c.disabled=true; }); }
+  function enableGrid(){ Array.prototype.forEach.call($minesGrid.children, function(c){ c.disabled=false; }); }
 
-    function resetMinesUI(){
-      $minesGrid.innerHTML="";
-      for(var i=0;i<totalCells;i++){
-        var cell=document.createElement("button");
-        cell.className="mine-cell";
-        cell.dataset.idx=String(i);
-        cell.textContent="?";
-        cell.disabled=true;
-        (function(idx,el){ el.addEventListener("click", function(){ onMine(idx, el); }); })(i, cell);
-        $minesGrid.appendChild(cell);
-      }
-      $minesMsg.textContent="—"; $minesCash.disabled=true;
+  $minesStart.addEventListener("click", async function(){
+    if(!currentUser) return;
+    var bet=parseInt($minesBet.value||"100",10);
+    var cnt=parseInt($minesCount.value||"5",10);
+    $minesMsg.textContent="Игра началась!";
+    var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "start", bet: bet, mines: cnt });
+    if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
+    currentUser.balance = data.balance;
+    updateBalanceUI(); enableGrid(); $minesCash.disabled=true;
+  });
+
+  async function onMine(idx, el){
+    var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "reveal", idx: idx });
+    if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
+    if(data.state && data.state.boom){
+      Array.prototype.forEach.call($minesGrid.children, function(c,i){ c.disabled=true; if(data.state.mines.includes(i)){ c.classList.add("boom"); c.textContent="💣"; } });
+      $minesMsg.textContent="💥 Мина! Ставка проиграна."; $minesCash.disabled=true;
+    }else{
+      el.classList.add("revealed"); el.textContent="💎"; el.disabled=true;
+      var pr=data.result||{total:0,profit:0};
+      $minesMsg.textContent="Безопасно! Профит: +"+pr.profit; $minesCash.disabled=false;
     }
-    resetMinesUI();
+  }
 
-    function disableGrid(){ Array.prototype.forEach.call($minesGrid.children, function(c){ c.disabled=true; }); }
-    function enableGrid(){ Array.prototype.forEach.call($minesGrid.children, function(c){ c.disabled=false; }); }
-
-    $minesStart.addEventListener("click", async function(){
-      if(!currentUser) return;
-      var bet=parseInt($minesBet.value||"100",10); var cnt=parseInt($minesCount.value||"5",10);
-      $minesMsg.textContent="Игра началась!";
-      var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "start", bet: bet, mines: cnt });
-      if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
-      currentUser.balance = data.balance;
-      updateBalanceUI(); enableGrid(); $minesCash.disabled=true;
-    });
-
-    async function onMine(idx, el){
-      var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "reveal", idx: idx });
-      if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
-      if(data.state && data.state.boom){
-        // reveal all mines
-        Array.prototype.forEach.call($minesGrid.children, function(c,i){ c.disabled=true; if(data.state.mines.includes(i)){ c.classList.add("boom"); c.textContent="💣"; } });
-        $minesMsg.textContent="💥 Мина! Ставка проиграна."; $minesCash.disabled=true;
-      }else{
-        el.classList.add("revealed"); el.textContent="💎"; el.disabled=true;
-        var pr=data.result||{total:0,profit:0};
-        $minesMsg.textContent="Безопасно! Сейчас ×, профит: +"+pr.profit; $minesCash.disabled=false;
-      }
-    }
-
-    $minesCash.addEventListener("click", async function(){
-      var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "cashout" });
-      if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
-      currentUser.balance = data.balance;
-      $minesMsg.textContent="Забрал +" + (data.result.profit) + ". Итог: " + data.result.total + ".";
-      updateBalanceUI(); disableGrid(); $minesCash.disabled=true;
-    });
+  $minesCash.addEventListener("click", async function(){
+    var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "cashout" });
+    if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
+    currentUser.balance = data.balance;
+    $minesMsg.textContent="Забрал +"+(data.result.profit)+". Итог: "+data.result.total+".";
+    updateBalanceUI(); disableGrid(); $minesCash.disabled=true;
+  });
   </script>
 </body>
 </html>
