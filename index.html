@@ -1,101 +1,387 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Lucky Box Casino 🎰</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lucky Box Casino</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="authPanel">
-    <h1>Lucky Box Casino</h1>
-    <input id="nickname" placeholder="Введите ник">
-    <button id="loginBtn">Войти</button>
-    <p id="authMsg"></p>
+  <!-- AUTH -->
+  <div id="authPanel" class="card auth">
+    <h1 class="logo">Lucky Box Casino</h1>
+    <p class="note">Вход по нику. Баланс хранится в облаке (MockAPI).</p>
+    <input id="nickname" placeholder="Никнейм" maxlength="24" />
+    <div class="row" style="justify-content:center">
+      <button class="btn" id="loginBtn">Войти</button>
+      <button class="btn ghost" id="registerBtn">Регистрация</button>
+    </div>
+    <p id="authMsg" class="msg">—</p>
   </div>
 
-  <div id="casino" class="hidden">
-    <div class="topbar">
-      <span>Игрок: <b id="userDisplay"></b></span>
-      <span>Баланс: <b id="balance"></b></span>
-      <button id="logoutBtn">Выйти</button>
-    </div>
+  <!-- CASINO -->
+  <div id="casino" class="container hidden">
+    <header class="topbar">
+      <div class="brand">🎲 Lucky Box</div>
+      <div class="pill">
+        Привет, <b id="userDisplay">—</b>! Баланс: <b id="balance">0</b> 💰
+      </div>
+      <button class="btn danger" id="logoutBtn">🚪 Выйти</button>
+    </header>
 
-    <div class="tabs">
-      <button class="tab" data-game="slots">🎰 Слоты</button>
-      <button class="tab" data-game="blackjack">🃏 Блэкджек</button>
-      <button class="tab" data-game="roulette">🎡 Рулетка</button>
-      <button class="tab" data-game="mines">💣 Мины</button>
-    </div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="tab-slots">🎰 Слоты</button>
+      <button class="tab-btn" data-tab="tab-bj">🃏 Блэкджек</button>
+      <button class="tab-btn" data-tab="tab-roulette">🎡 Рулетка</button>
+      <button class="tab-btn" data-tab="tab-mines">💣 Мины</button>
+    </nav>
 
-    <div id="gameArea">
-      <button id="playBtn">Играть</button>
-      <p id="gameMsg"></p>
-    </div>
+    <!-- СЛОТЫ -->
+    <section id="tab-slots" class="card">
+      <h2>Слоты</h2>
+      <div class="slot-wrap">
+        <div class="reels" id="reels"></div>
+        <div class="controls">
+          <button class="btn" id="spin">Крутить (-100)</button>
+          <p id="slotMsg" class="msg">—</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- БЛЭКДЖЕК -->
+    <section id="tab-bj" class="card hidden">
+      <h2>Блэкджек</h2>
+      <div class="table">
+        <div class="msg faint">Ставка фиксированная: 200</div>
+        <div class="hands">
+          <div>
+            <h3>Игрок</h3>
+            <div class="hand" id="playerHand"></div>
+          </div>
+          <div>
+            <h3>Дилер</h3>
+            <div class="hand" id="dealerHand"></div>
+          </div>
+        </div>
+        <div class="bj-ctrls">
+          <button class="btn" id="bjStart">Новый раунд (-200)</button>
+          <button class="btn" id="hit" disabled>Взять</button>
+          <button class="btn" id="stand" disabled>Хватит</button>
+        </div>
+        <div id="bjMsg" class="msg">—</div>
+      </div>
+    </section>
+
+    <!-- РУЛЕТКА -->
+    <section id="tab-roulette" class="card hidden">
+      <h2>Рулетка</h2>
+      <div class="roulette">
+        <div class="wheel-area">
+          <div class="pointer" id="pointer"></div>
+          <div class="wheel" id="wheel"><div class="face"></div></div>
+        </div>
+        <div class="row">
+          <label class="pill">Ставка на цвет:
+            <select id="pickColor">
+              <option value="red">красное</option>
+              <option value="black">чёрное</option>
+              <option value="green">зеро</option>
+            </select>
+          </label>
+          <button class="btn" id="spinRoulette">Вращать (-150)</button>
+        </div>
+        <div id="roulMsg" class="msg">—</div>
+      </div>
+    </section>
+
+    <!-- МИНЫ -->
+    <section id="tab-mines" class="card hidden">
+      <h2>Мины</h2>
+      <div class="mines-wrap">
+        <div class="row wrap">
+          <label class="pill">Ставка:
+            <input id="minesBet" type="number" min="1" value="100" />
+          </label>
+          <label class="pill">Мин:
+            <input id="minesCount" type="number" min="1" max="24" value="5" />
+          </label>
+          <button class="btn" id="minesStart">Начать</button>
+          <button class="btn" id="minesCashout" disabled>Забрать выигрыш</button>
+        </div>
+        <div class="mines-grid" id="minesGrid"></div>
+        <div id="minesMsg" class="msg">—</div>
+      </div>
+    </section>
   </div>
 
-<script>
-let currentUser = null;
-const $auth = document.getElementById("authPanel");
-const $casino = document.getElementById("casino");
-const $bal = document.getElementById("balance");
-const $user = document.getElementById("userDisplay");
-const $msg = document.getElementById("authMsg");
-const $gmsg = document.getElementById("gameMsg");
-let currentGame = "slots";
+  <!-- JS -->
+  <script>
+    "use strict";
 
-// === Авторизация ===
-document.getElementById("loginBtn").addEventListener("click", async () => {
-  const name = document.getElementById("nickname").value.trim();
-  if (!name) return $msg.textContent = "Введите ник";
+    // ====== Auth state ======
+    var $auth = document.getElementById("authPanel");
+    var $casino = document.getElementById("casino");
+    var $authMsg = document.getElementById("authMsg");
+    var $nick = document.getElementById("nickname");
+    var $user = document.getElementById("userDisplay");
+    var $bal = document.getElementById("balance");
+    var currentUser = null;
 
-  $msg.textContent = "Вход...";
-  const res = await fetch("/api/login", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name })
-  });
-  const data = await res.json();
-  if (!data.ok) return $msg.textContent = data.error || "Ошибка";
-  currentUser = data.user;
-  openCasino();
-});
+    function updateBalanceUI(){
+      $bal.textContent = currentUser.balance;
+      $bal.parentElement.classList.add("shine");
+      setTimeout(function(){ $bal.parentElement.classList.remove("shine"); }, 600);
+    }
+    function openCasino(){
+      $auth.classList.add("hidden");
+      $casino.classList.remove("hidden");
+      document.querySelector('[data-tab="tab-slots"]').click();
+      $user.textContent = currentUser.name;
+      updateBalanceUI();
+    }
 
-function openCasino() {
-  $auth.classList.add("hidden");
-  $casino.classList.remove("hidden");
-  $user.textContent = currentUser.name;
-  $bal.textContent = currentUser.balance;
-}
+    async function api(path, body){
+      var res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {})
+      });
+      return res.json();
+    }
 
-// === Переключение вкладок ===
-document.querySelectorAll(".tab").forEach(btn => {
-  btn.onclick = () => {
-    currentGame = btn.dataset.game;
-    document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
-    $gmsg.textContent = "Выбрана игра: " + btn.textContent;
-  };
-});
+    // ====== Login / Register ======
+    document.getElementById("loginBtn").addEventListener("click", async function(){
+      var nick = $nick.value.trim();
+      if(!nick){ $authMsg.textContent="Введите ник"; return; }
+      $authMsg.textContent="Вход...";
+      var data = await api("/api/login", { name: nick });
+      if(!data.ok){ $authMsg.textContent=data.error||"Ошибка"; return; }
+      currentUser = data.user;
+      openCasino();
+    });
+    document.getElementById("registerBtn").addEventListener("click", async function(){
+      var nick = $nick.value.trim();
+      if(!nick){ $authMsg.textContent="Введите ник"; return; }
+      $authMsg.textContent="Регистрация...";
+      var data = await api("/api/register", { name: nick });
+      if(!data.ok){ $authMsg.textContent=data.error||"Ошибка"; return; }
+      currentUser = data.user;
+      openCasino();
+    });
+    document.getElementById("logoutBtn").addEventListener("click", function(){
+      location.reload();
+    });
 
-// === Играть ===
-document.getElementById("playBtn").addEventListener("click", async () => {
-  if (!currentUser) return;
-  $gmsg.textContent = "Запуск...";
-  const body = { name: currentUser.name, game: currentGame, action: "spin" };
-  const res = await fetch("/api/play", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
-  const data = await res.json();
-  if (data.error) return $gmsg.textContent = data.error;
-  if (data.ok) {
-    $bal.textContent = data.balance;
-    if (data.win > 0) $gmsg.textContent = `🎉 Выигрыш: +${data.win}`;
-    else $gmsg.textContent = "❌ Проигрыш";
-  }
-});
+    // ====== Tabs ======
+    document.querySelectorAll(".tab-btn").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.remove("active"); });
+        btn.classList.add("active");
+        document.querySelectorAll("section.card").forEach(function(s){ s.classList.add("hidden"); });
+        document.getElementById(btn.dataset.tab).classList.remove("hidden");
+      });
+    });
 
-// === Выход ===
-document.getElementById("logoutBtn").onclick = () => location.reload();
-</script>
+    // ====== SLOTS (client UI only; result from server) ======
+    var symbols = ["🍒","🍋","⭐","🔔","🍀","7️⃣","💎","🍉"];
+    var $reels = document.getElementById("reels");
+    var reelEls = [];
+
+    function makeStrip(result){
+      var strip = document.createElement("div");
+      strip.className = "strip";
+      strip.style.top = "-360px";
+      for (var i=0;i<3;i++){
+        var c=document.createElement("div");
+        c.className="cell";
+        c.textContent=result[i];
+        strip.appendChild(c);
+      }
+      for (var j=0;j<3;j++){
+        var c2=document.createElement("div");
+        c2.className="cell";
+        c2.textContent=symbols[Math.floor(Math.random()*symbols.length)];
+        strip.appendChild(c2);
+      }
+      return strip;
+    }
+    function initSlotsUI(){
+      $reels.innerHTML="";
+      reelEls=[];
+      for (var i=0;i<5;i++){
+        var reel=document.createElement("div");
+        reel.className="reel";
+        var res=[0,1,2].map(function(){ return symbols[Math.floor(Math.random()*symbols.length)]; });
+        reel.appendChild(makeStrip(res));
+        $reels.appendChild(reel);
+        reelEls.push(reel);
+      }
+    }
+    initSlotsUI();
+
+    var slotMsg = document.getElementById("slotMsg");
+    document.getElementById("spin").addEventListener("click", async function(){
+      if(!currentUser) return;
+      var reelsWrap=document.querySelector(".reels");
+      reelsWrap.classList.add("shake");
+      setTimeout(function(){ reelsWrap.classList.remove("shake"); },900);
+      slotMsg.textContent="Крутим…";
+
+      // ask server
+      var data = await api("/api/play", { name: currentUser.name, game: "slots", action: "spin" });
+      if(!data.ok){ slotMsg.textContent=data.error||"Ошибка"; return; }
+      currentUser.balance = data.balance;
+
+      // simple animation end
+      setTimeout(function(){
+        var win=data.result.win||0;
+        slotMsg.textContent = win ? ("🎉 Выигрыш +" + win) : "Проигрыш";
+        updateBalanceUI();
+      }, 600);
+    });
+
+    // ====== BLACKJACK ======
+    var $pHand=document.getElementById("playerHand");
+    var $dHand=document.getElementById("dealerHand");
+    var $bjMsg=document.getElementById("bjMsg");
+    var $bjStart=document.getElementById("bjStart");
+    var $hit=document.getElementById("hit");
+    var $stand=document.getElementById("stand");
+
+    function renderBJ(state){
+      // state: {player, dealer, totals}
+      $pHand.innerHTML=""; $dHand.innerHTML="";
+      (state.player||[]).forEach(function(c){ $pHand.appendChild(cardEl(c)); });
+      (state.dealer||[]).forEach(function(c){ $dHand.appendChild(cardEl(c)); });
+    }
+    function cardEl(card){
+      if(card==="🂠"){
+        var d=document.createElement("div");
+        d.className="card-face";
+        d.style.background="#1b2442"; d.style.borderColor="rgba(255,255,255,.2)"; d.style.color="#1b2442";
+        d.innerHTML='<div class="rank">?</div><div class="suit">?</div>';
+        return d;
+      }
+      var r=card.slice(0,-1), s=card.slice(-1);
+      var d=document.createElement("div");
+      d.className="card-face"+((s==="♥"||s==="♦")?" red":"");
+      d.innerHTML='<div class="rank">'+r+'</div><div class="suit">'+s+'</div>';
+      d.style.animation="deal .28s ease";
+      return d;
+    }
+
+    $bjStart.addEventListener("click", async function(){
+      if(!currentUser) return;
+      $bjMsg.textContent="Раздача...";
+      var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "start" });
+      if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
+      currentUser.balance = data.balance;
+      renderBJ(data.state);
+      $bjMsg.textContent="Ваш ход: Взять или Хватит";
+      $hit.disabled=false; $stand.disabled=false;
+      updateBalanceUI();
+    });
+
+    $hit.addEventListener("click", async function(){
+      var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "hit" });
+      if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
+      renderBJ(data.state);
+      if(data.state.outcome==="bust"){ $bjMsg.textContent="Перебор! Проигрыш."; $hit.disabled=true; $stand.disabled=true; }
+    });
+
+    $stand.addEventListener("click", async function(){
+      var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "stand" });
+      if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
+      currentUser.balance = data.balance;
+      renderBJ(data.state);
+      var win = (data.result && data.result.win) || 0;
+      $bjMsg.textContent = win ? ("Победа! +" + (win-200)) : "Проигрыш";
+      $hit.disabled=true; $stand.disabled=true; updateBalanceUI();
+    });
+
+    // ====== ROULETTE ======
+    var order=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+    var colors={0:"green"}; var reds=new Set([32,19,21,25,34,27,36,30,23,5,16,1,14,9,18,7,12,3]); order.forEach(function(n){ if(n!==0){ colors[n]=reds.has(n)?"red":"black"; } });
+    var seg=360/order.length; var $wheel=document.getElementById("wheel"); var $roulMsg=document.getElementById("roulMsg"); var $pickColor=document.getElementById("pickColor"); var $pointer=document.getElementById("pointer");
+
+    function spinTo(idx){
+      var target=360-(idx*seg+seg/2);
+      var turns=6+Math.floor(Math.random()*4);
+      var rot=turns*360+target;
+      $wheel.style.transition="transform 3.2s cubic-bezier(.18,.75,.2,1)";
+      $wheel.style.transform="rotate("+rot+"deg)";
+    }
+    document.getElementById("spinRoulette").addEventListener("click", async function(){
+      if(!currentUser) return;
+      $roulMsg.textContent="Вращение…";
+      var data = await api("/api/play", { name: currentUser.name, game: "roulette", action: "spin", pick: $pickColor.value });
+      if(!data.ok){ $roulMsg.textContent=data.error||"Ошибка"; return; }
+      currentUser.balance = data.balance;
+      // крутим на указанный сегмент
+      if(data.result && typeof data.result.index==="number"){ spinTo(data.result.index); }
+      setTimeout(function(){
+        var num=data.result.num, col=data.result.color, win=data.result.win||0;
+        $pointer.classList.add("pointer-tick"); setTimeout(function(){ $pointer.classList.remove("pointer-tick"); }, 500);
+        $roulMsg.textContent = "Выпало "+num+" ("+col+"). " + (win?("Выигрыш +"+win):"Проигрыш.");
+        updateBalanceUI();
+      }, 3300);
+    });
+
+    // ====== MINES ======
+    var gridSize=5; var totalCells=gridSize*gridSize;
+    var $minesGrid=document.getElementById("minesGrid"); var $minesMsg=document.getElementById("minesMsg");
+    var $minesBet=document.getElementById("minesBet"); var $minesCount=document.getElementById("minesCount");
+    var $minesStart=document.getElementById("minesStart"); var $minesCash=document.getElementById("minesCashout");
+
+    function resetMinesUI(){
+      $minesGrid.innerHTML="";
+      for(var i=0;i<totalCells;i++){
+        var cell=document.createElement("button");
+        cell.className="mine-cell";
+        cell.dataset.idx=String(i);
+        cell.textContent="?";
+        cell.disabled=true;
+        (function(idx,el){ el.addEventListener("click", function(){ onMine(idx, el); }); })(i, cell);
+        $minesGrid.appendChild(cell);
+      }
+      $minesMsg.textContent="—"; $minesCash.disabled=true;
+    }
+    resetMinesUI();
+
+    function disableGrid(){ Array.prototype.forEach.call($minesGrid.children, function(c){ c.disabled=true; }); }
+    function enableGrid(){ Array.prototype.forEach.call($minesGrid.children, function(c){ c.disabled=false; }); }
+
+    $minesStart.addEventListener("click", async function(){
+      if(!currentUser) return;
+      var bet=parseInt($minesBet.value||"100",10); var cnt=parseInt($minesCount.value||"5",10);
+      $minesMsg.textContent="Игра началась!";
+      var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "start", bet: bet, mines: cnt });
+      if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
+      currentUser.balance = data.balance;
+      updateBalanceUI(); enableGrid(); $minesCash.disabled=true;
+    });
+
+    async function onMine(idx, el){
+      var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "reveal", idx: idx });
+      if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
+      if(data.state && data.state.boom){
+        // reveal all mines
+        Array.prototype.forEach.call($minesGrid.children, function(c,i){ c.disabled=true; if(data.state.mines.includes(i)){ c.classList.add("boom"); c.textContent="💣"; } });
+        $minesMsg.textContent="💥 Мина! Ставка проиграна."; $minesCash.disabled=true;
+      }else{
+        el.classList.add("revealed"); el.textContent="💎"; el.disabled=true;
+        var pr=data.result||{total:0,profit:0};
+        $minesMsg.textContent="Безопасно! Сейчас ×, профит: +"+pr.profit; $minesCash.disabled=false;
+      }
+    }
+
+    $minesCash.addEventListener("click", async function(){
+      var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "cashout" });
+      if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
+      currentUser.balance = data.balance;
+      $minesMsg.textContent="Забрал +" + (data.result.profit) + ". Итог: " + data.result.total + ".";
+      updateBalanceUI(); disableGrid(); $minesCash.disabled=true;
+    });
+  </script>
 </body>
 </html>
