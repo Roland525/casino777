@@ -122,6 +122,92 @@
   <script>
 "use strict";
 
+// == DevTools & Keys protection (lightweight) ==
+// Вставь этот блок в начало <script> в index.html
+
+(function () {
+  "use strict";
+
+  // --- Блокировка контекстного меню и мыши ---
+  document.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+  }, { capture: true });
+
+  // --- Блокировка горячих клавиш DevTools / view-source ---
+  document.addEventListener("keydown", function (e) {
+    // F12
+    if (e.key === "F12" || e.keyCode === 123) {
+      e.preventDefault();
+      return false;
+    }
+    // Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C
+    if (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "C")) {
+      e.preventDefault();
+      return false;
+    }
+    // Ctrl+U (View Source)
+    if (e.ctrlKey && (e.key === "u" || e.key === "U" || e.keyCode === 85)) {
+      e.preventDefault();
+      return false;
+    }
+    // Ctrl+Shift+K (Firefox console)
+    if (e.ctrlKey && e.shiftKey && (e.key === "K" || e.key === "k")) {
+      e.preventDefault();
+      return false;
+    }
+  }, { capture: true });
+
+  // --- Простая детекция открытия DevTools по размерам окна ---
+  // Порог можно подправить (в пикселях)
+  const DEVTOOLS_THRESHOLD = 160;
+  let devtoolsOpen = false;
+
+  function checkDevToolsBySize() {
+    const widthDiff = Math.abs(window.outerWidth - window.innerWidth);
+    const heightDiff = Math.abs(window.outerHeight - window.innerHeight);
+    return (widthDiff > DEVTOOLS_THRESHOLD) || (heightDiff > DEVTOOLS_THRESHOLD);
+  }
+
+  function onDevtoolsOpen() {
+    if (devtoolsOpen) return;
+    devtoolsOpen = true;
+    try {
+      // реакция: скрыть интерфейс / показать предупреждение / редирект
+      // Ниже — пример: показываем баннер и затем перезагружаем страницу
+      alert("Доступ к инструментам разработчика обнаружен. Действие заблокировано.");
+      // Можно заменить на: location.reload(); или скрыть важные элементы:
+      // document.body.innerHTML = "<h2>Доступ запрещён</h2>";
+    } catch (e) { /* ignore */ }
+  }
+
+  function onDevtoolsClose() {
+    devtoolsOpen = false;
+  }
+
+  // Интервал для проверки
+  setInterval(function () {
+    if (checkDevToolsBySize()) {
+      onDevtoolsOpen();
+    } else {
+      if (devtoolsOpen) onDevtoolsClose();
+    }
+  }, 800);
+
+  // --- Дополнительная (опциональная) проверка: попытка "консольного" детектирования ---
+  // Этот трюк использует getter — не всегда надёжен, можно отключить если мешает.
+  try {
+    const element = new Image();
+    Object.defineProperty(element, "id", {
+      get: function () {
+        onDevtoolsOpen(); // если консоль пытаются прочитать объект, сработает
+      }
+    });
+    // Выводим объект в консоль — когда DevTools открыт, браузер попытается вывести и вызовет getter
+    console.log(element);
+  } catch (e) { /* ignore for older browsers */ }
+
+})();
+
 /************* MOCKAPI CONFIG *************/
 var API_URL = "https://69147b693746c71fe0486c2c.mockapi.io/users"; // твой настоящий URL
 
