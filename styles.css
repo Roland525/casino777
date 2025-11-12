@@ -9,8 +9,8 @@ body{
   padding:18px;min-height:100vh;
 }
 .hidden{display:none}
-.logo{color:var(--line);text-shadow:0 0 18px rgba(0,224,255,.6);margin:6px 0 14px;font-size:40px}
-.note{opacity:.75;margin-top:-8px}
+.logo{color:var(--line);text-shadow:0 0 18px rgba(0,224,255,.6);margin:6px 0 14px;font-size:40px;text-align:center}
+.note{opacity:.75;margin-top:-8px;text-align:center}
 .card{
   background:var(--glass);border:1px solid rgba(255,255,255,.1);border-radius:18px;
   box-shadow:0 10px 30px rgba(0,0,0,.45);padding:16px;max-width:1000px;margin:0 auto;
@@ -39,6 +39,7 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
 .tabs{display:flex;justify-content:center;gap:10px;margin:12px auto 18px;flex-wrap:wrap}
 .tab-btn{padding:10px 16px;border:none;border-radius:12px;background:linear-gradient(135deg,#203055,#2d3a61);color:#d3e7ff;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,.1)}
 .tab-btn.active{background:linear-gradient(135deg,var(--line),var(--accent));color:#0b0f1a;box-shadow:0 0 24px rgba(0,224,255,.45)}
+
 /* slots */
 .slot-wrap{display:grid;place-items:center;gap:10px}
 .reels{display:grid;grid-template-columns:repeat(5,100px);gap:10px}
@@ -49,6 +50,7 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
 .reels.shake{animation:shake .35s ease 3}
 .shine{animation:flashWin .8s ease}
 .glow{animation:flashWin .9s ease}
+
 /* blackjack */
 .table{background:radial-gradient(600px 240px at 50% -30%, rgba(0,224,255,.12), transparent 60%), #0d172d; border:1px solid rgba(255,255,255,.12);
   border-radius:16px;padding:14px}
@@ -60,6 +62,7 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
 .rank{position:absolute;top:6px;left:8px;font-weight:900}
 .suit{font-size:28px;display:grid;place-items:center;height:100%}
 .bj-ctrls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+
 /* roulette */
 .roulette{display:grid;place-items:center;gap:10px}
 .wheel-area{position:relative;width:260px;height:260px;margin:auto}
@@ -76,16 +79,17 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
   #1a1a1a 291.9deg 301.63deg,#c1121f 301.63deg 311.36deg,#1a1a1a 311.36deg 321.09deg,#c1121f 321.09deg 330.82deg,#1a1a1a 330.82deg 340.55deg,
   #c1121f 340.55deg 350.28deg,#1a1a1a 350.28deg 360deg)}
 .pointer-tick{animation:pointerTick .5s ease}
+
 /* mines */
 .mines-wrap{display:grid;place-items:center;gap:10px}
-.row{display:flex;gap:10px;justify-content:center;align-items:center}
-.row.wrap{flex-wrap:wrap}
+.row{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap}
 .mines-grid{display:grid;grid-template-columns:repeat(5,56px);gap:8px;margin-top:8px}
 .mine-cell{width:56px;height:56px;border-radius:10px;border:2px solid var(--line);background:#0c1430;display:grid;place-items:center;
   font-weight:900;font-size:18px;color:#cde9ff;cursor:pointer;transition:transform .1s ease, filter .2s ease, background .2s}
 .mine-cell:hover{transform:translateY(-2px);filter:brightness(1.15)}
 .mine-cell.revealed{background:#102553;color:#a8c7ff;cursor:default;animation:pulse .4s ease}
 .mine-cell.boom{background:#3b0d14;color:#fff;border-color:#ff3b3b;animation:shake .4s ease}
+
 /* anim */
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 @keyframes spin{0%{transform:translateY(0)}100%{transform:translateY(360px)}}
@@ -93,3 +97,29 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
 @keyframes flashWin{0%,100%{box-shadow:0 0 0 rgba(57,217,138,0)}50%{box-shadow:0 0 40px rgba(57,217,138,.6)}}
 @keyframes pointerTick{0%{transform:translate(-50%,-50%) rotate(90deg)}40%{transform:translate(-50%,-50%) rotate(96deg)}100%{transform:translate(-50%,-50%) rotate(90deg)}}
 @keyframes pulse{0%{transform:scale(.96)}100%{transform:scale(1)}}
+
+/* 📱 МОБИЛЬНАЯ АДАПТАЦИЯ */
+@media (max-width: 768px){
+  body{padding:10px;font-size:15px}
+  .card{padding:12px}
+  .topbar{grid-template-columns:1fr;gap:6px;text-align:center}
+  .tabs{gap:6px}
+  .tab-btn{flex:1 1 40%;padding:8px 10px;font-size:14px}
+  .reels{grid-template-columns:repeat(3,80px);gap:6px}
+  .reel{width:80px;height:96px}
+  .cell{font-size:36px;height:96px}
+  .mine-cell{width:44px;height:44px;font-size:16px}
+  .wheel-area{width:200px;height:200px}
+  .card-face{width:58px;height:82px}
+  .btn{padding:10px 14px;font-size:14px}
+  input,select{min-width:180px;font-size:14px}
+}
+@media (max-width: 480px){
+  .logo{font-size:30px}
+  .brand{font-size:18px}
+  .pill{font-size:13px;padding:8px 12px}
+  .mine-cell{width:40px;height:40px}
+  .reels{grid-template-columns:repeat(3,70px)}
+  .reel{width:70px;height:84px}
+  .cell{font-size:30px;height:84px}
+}
