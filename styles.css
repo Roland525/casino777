@@ -36,7 +36,7 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
 .container{max-width:1100px;margin:0 auto}
 .topbar{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;margin-bottom:10px}
 .brand{font-weight:900;color:var(--warn);text-shadow:0 0 14px rgba(255,209,102,.4)}
-.tabs{display:flex;justify-content:center;gap:10px;margin:12px auto 18px;регуля flex-wrap:wrap}
+.tabs{display:flex;justify-content:center;gap:10px;margin:12px auto 18px;flex-wrap:wrap}
 .tab-btn{padding:10px 16px;border:none;border-radius:12px;background:linear-gradient(135deg,#203055,#2d3a61);color:#d3e7ff;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,.1)}
 .tab-btn.active{background:linear-gradient(135deg,var(--line),var(--accent));color:#0b0f1a;box-shadow:0 0 24px rgba(0,224,255,.45)}
 
@@ -46,10 +46,8 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
 .reel{width:100px;height:120px;border-radius:14px;border:2px solid var(--line);background:#0c1430;overflow:hidden;position:relative}
 .strip{position:absolute;left:0;top:-360px;width:100%}
 .cell{height:120px;display:grid;place-items:center;font-size:48px}
-.spinning .strip{animation:spin 1.2s cubic-bezier(.2,.7,.2,1) forwards}
 .reels.shake{animation:shake .35s ease 3}
 .shine{animation:flashWin .8s ease}
-.glow{animation:flashWin .9s ease}
 
 /* BLACKJACK */
 .table{background:radial-gradient(600px 240px at 50% -30%, rgba(0,224,255,.12), transparent 60%), #0d172d; border:1px solid rgba(255,255,255,.12);
@@ -92,7 +90,6 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
 
 /* anim */
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
-@keyframes spin{0%{transform:translateY(0)}100%{transform:translateY(360px)}}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 @keyframes flashWin{0%,100%{box-shadow:0 0 0 rgba(57,217,138,0)}50%{box-shadow:0 0 40px rgba(57,217,138,.6)}}
 @keyframes pointerTick{0%{transform:translate(-50%,-50%) rotate(90deg)}40%{transform:translate(-50%,-50%) rotate(96deg)}100%{transform:translate(-50%,-50%) rotate(90deg)}}

@@ -1,15 +1,12 @@
 {
   "name": "luckybox-casino",
-  "version": "2.0.0",
-  "description": "Lucky Box Casino server",
+  "version": "1.0.0",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "node-fetch": "^3.3.2",
-    "cors": "^2.8.5"
+    "express": "^4.19.2"
   }
 }

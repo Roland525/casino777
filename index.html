@@ -12,10 +12,7 @@
     <h1 class="logo">Lucky Box Casino</h1>
     <p class="note">Вход по нику. Баланс хранится в облаке (MockAPI).</p>
     <input id="nickname" placeholder="Никнейм" maxlength="24" />
-    <div class="row" style="justify-content:center">
-      <button class="btn" id="loginBtn">Войти</button>
-      <button class="btn ghost" id="registerBtn">Регистрация</button>
-    </div>
+    <button class="btn" id="loginBtn">Войти / Зарегистрироваться</button>
     <p id="authMsg" class="msg">—</p>
   </div>
 
@@ -50,7 +47,7 @@
     <section id="tab-bj" class="card hidden">
       <h2>Блэкджек</h2>
       <div class="table">
-        <div class="msg faint">Ставка фиксированная: 200</div>
+        <div class="msg faint">Ставка: 200. Цель — ближе к 21, чем дилер.</div>
         <div class="hands">
           <div>
             <h3>Игрок</h3>
@@ -115,19 +112,24 @@
   <script>
   "use strict";
 
-  // ====== Auth state ======
-  var $auth = document.getElementById("authPanel");
-  var $casino = document.getElementById("casino");
-  var $authMsg = document.getElementById("authMsg");
-  var $nick = document.getElementById("nickname");
-  var $user = document.getElementById("userDisplay");
-  var $bal = document.getElementById("balance");
-  var currentUser = null;
+  // ====== Конфиг MockAPI (ПРОВЕРЬ, ЧТО /users — ТВОЙ РЕСУРС!) ======
+  const MOCK_URL = "https://69147b693746c71fe0486c2c.mockapi.io/users";
 
+  // ====== Селекторы и состояние ======
+  const $auth = document.getElementById("authPanel");
+  const $casino = document.getElementById("casino");
+  const $authMsg = document.getElementById("authMsg");
+  const $nick = document.getElementById("nickname");
+  const $user = document.getElementById("userDisplay");
+  const $bal = document.getElementById("balance");
+  let currentUser = null;
+
+  // ====== Утилиты ======
+  function toInt(x, def=0){ const n = Number(x); return Number.isFinite(n)? n : def; }
   function updateBalanceUI(){
-    $bal.textContent = currentUser.balance;
+    $bal.textContent = toInt(currentUser?.balance, 0);
     $bal.parentElement.classList.add("shine");
-    setTimeout(function(){ $bal.parentElement.classList.remove("shine"); }, 600);
+    setTimeout(()=> $bal.parentElement.classList.remove("shine"), 600);
   }
   function openCasino(){
     $auth.classList.add("hidden");
@@ -137,264 +139,302 @@
     updateBalanceUI();
   }
 
-  async function api(path, body){
-    var res = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body || {})
-    });
-    return res.json();
+  async function req(url, opts={}){
+    try{
+      const r = await fetch(url, opts);
+      // MockAPI на ошибках иногда возвращает не-JSON — ловим аккуратно
+      const text = await r.text();
+      try { return { ok:r.ok, status:r.status, data: text ? JSON.parse(text) : null }; }
+      catch { return { ok:r.ok, status:r.status, data: null }; }
+    }catch(e){
+      return { ok:false, status:0, data:null, error:e?.message||String(e) };
+    }
   }
 
-  // ====== вход / регистрация ======
-  document.getElementById("loginBtn").addEventListener("click", async function(){
-    var nick = $nick.value.trim();
-    if(!nick){ $authMsg.textContent="Введите ник"; return; }
-    $authMsg.textContent="Вход...";
-    try{
-      var data = await api("/api/login", { name: nick });
-      if (data.error){ $authMsg.textContent=data.error; return; }
-      if (data.ok && data.user){
-        currentUser = data.user;
-        openCasino();
-      } else {
-        $authMsg.textContent = "Ошибка входа";
-      }
-    }catch(e){
-      $authMsg.textContent="Ошибка сервера";
+  // GET /users?name=... с fallback на /users (фильтрация на клиенте)
+  async function findUserByName(name){
+    const q = await req(`${MOCK_URL}?name=${encodeURIComponent(name)}`);
+    if (q.ok && Array.isArray(q.data)) return q.data[0] || null;
+
+    // fallback (если внезапно 404/500)
+    const all = await req(MOCK_URL);
+    if (all.ok && Array.isArray(all.data)){
+      return all.data.find(u => String(u?.name||"").trim() === String(name).trim()) || null;
     }
-  });
+    return null;
+  }
 
-  document.getElementById("registerBtn").addEventListener("click", async function(){
-    var nick = $nick.value.trim();
+  async function createUser(name){
+    const r = await req(MOCK_URL, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ name, balance: 1000 })
+    });
+    return r.ok ? r.data : null;
+  }
+
+  async function saveBalance(){
+    if(!currentUser?.id) return; // защита от /users/undefined
+    const body = { name: currentUser.name, balance: toInt(currentUser.balance,0) };
+    await req(`${MOCK_URL}/${currentUser.id}`, {
+      method:"PUT",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(body)
+    });
+  }
+
+  // ====== Логин / Регистрация ======
+  document.getElementById("loginBtn").addEventListener("click", async ()=>{
+    const nick = $nick.value.trim();
     if(!nick){ $authMsg.textContent="Введите ник"; return; }
-    $authMsg.textContent="Регистрация...";
-    try{
-      var data = await api("/api/register", { name: nick });
-      if (data.error){ $authMsg.textContent=data.error; return; }
-      if (data.ok && data.user){
-        currentUser = data.user;
-        openCasino();
-      } else {
-        $authMsg.textContent = "Ошибка регистрации";
-      }
-    }catch(e){
-      $authMsg.textContent="Ошибка сервера";
+    $authMsg.textContent="Проверяем…";
+    let u = await findUserByName(nick);
+    if (!u){
+      $authMsg.textContent="Создаём аккаунт…";
+      u = await createUser(nick);
+      if(!u){ $authMsg.textContent="Ошибка сервера"; return; }
     }
+    currentUser = { id: u.id, name: u.name, balance: toInt(u.balance,1000) };
+    $authMsg.textContent="Готово!";
+    openCasino();
   });
 
-  document.getElementById("logoutBtn").addEventListener("click", function(){
-    location.reload();
-  });
+  document.getElementById("logoutBtn").addEventListener("click", ()=> location.reload());
 
-  // ====== Tabs ======
-  document.querySelectorAll(".tab-btn").forEach(function(btn){
-    btn.addEventListener("click", function(){
-      document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.remove("active"); });
+  // ====== Табы ======
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
       btn.classList.add("active");
-      document.querySelectorAll("section.card").forEach(function(s){ s.classList.add("hidden"); });
+      document.querySelectorAll("section.card").forEach(s=>s.classList.add("hidden"));
       document.getElementById(btn.dataset.tab).classList.remove("hidden");
     });
   });
 
-  // ====== SLOTS (UI) ======
-  var symbols = ["🍒","🍋","⭐","🔔","🍀","7️⃣","💎","🍉"];
-  var $reels = document.getElementById("reels");
-  var reelEls = [];
+  // ====== СЛОТЫ ======
+  const symbols = ["🍒","🍋","⭐","🔔","🍀","7️⃣","💎","🍉"];
+  const $reels = document.getElementById("reels");
+  const slotMsg = document.getElementById("slotMsg");
 
-  function makeStrip(result){
-    var strip = document.createElement("div");
-    strip.className = "strip";
-    strip.style.top = "-360px";
-    for (var i=0;i<3;i++){
-      var c=document.createElement("div");
-      c.className="cell";
-      c.textContent=result[i];
-      strip.appendChild(c);
-    }
-    for (var j=0;j<3;j++){
-      var c2=document.createElement("div");
-      c2.className="cell";
-      c2.textContent=symbols[Math.floor(Math.random()*symbols.length)];
-      strip.appendChild(c2);
-    }
-    return strip;
-  }
   function initSlotsUI(){
-    $reels.innerHTML=""; reelEls=[];
-    for (var i=0;i<5;i++){
-      var reel=document.createElement("div");
+    $reels.innerHTML="";
+    for(let i=0;i<5;i++){
+      const reel=document.createElement("div");
       reel.className="reel";
-      var res=[0,1,2].map(function(){ return symbols[Math.floor(Math.random()*symbols.length)]; });
-      reel.appendChild(makeStrip(res));
+      const strip=document.createElement("div");
+      strip.className="strip";
+      strip.style.top="-360px";
+      for(let j=0;j<6;j++){
+        const c=document.createElement("div");
+        c.className="cell";
+        c.textContent = symbols[Math.floor(Math.random()*symbols.length)];
+        strip.appendChild(c);
+      }
+      reel.appendChild(strip);
       $reels.appendChild(reel);
-      reelEls.push(reel);
     }
   }
   initSlotsUI();
 
-  var slotMsg = document.getElementById("slotMsg");
-  document.getElementById("spin").addEventListener("click", async function(){
+  document.getElementById("spin").addEventListener("click", async ()=>{
     if(!currentUser) return;
-    var reelsWrap=document.querySelector(".reels");
-    reelsWrap.classList.add("shake");
-    setTimeout(function(){ reelsWrap.classList.remove("shake"); },900);
-    slotMsg.textContent="Крутим…";
+    const COST = 100;
+    if (currentUser.balance < COST){ slotMsg.textContent="Недостаточно средств"; return; }
 
-    var data = await api("/api/play", { name: currentUser.name, game: "slots", action: "spin" });
-    if(!data.ok){ slotMsg.textContent=data.error||"Ошибка"; return; }
-    currentUser.balance = data.balance;
+    // RTP ~95%: 6% на 800, ~16% на 200
+    const r = Math.random();
+    let win = 0;
+    if (r < 0.06) win = 800;
+    else if (r < 0.22) win = 200;
 
-    setTimeout(function(){
-      var win=data.result.win||0;
-      slotMsg.textContent = win ? ("🎉 Выигрыш +" + win) : "Проигрыш";
-      updateBalanceUI();
-    }, 600);
+    currentUser.balance = toInt(currentUser.balance - COST + win, 0);
+    updateBalanceUI();
+    await saveBalance();
+
+    const reelsWrap=document.querySelector(".reels");
+    reelsWrap.classList.add("shake"); setTimeout(()=>reelsWrap.classList.remove("shake"),900);
+    slotMsg.textContent = win ? ("🎉 Выигрыш +" + win) : "Проигрыш";
   });
 
-  // ====== BLACKJACK ======
-  var $pHand=document.getElementById("playerHand");
-  var $dHand=document.getElementById("dealerHand");
-  var $bjMsg=document.getElementById("bjMsg");
-  var $bjStart=document.getElementById("bjStart");
-  var $hit=document.getElementById("hit");
-  var $stand=document.getElementById("stand");
+  // ====== БЛЭКДЖЕК ======
+  const SUITS=["♠","♥","♦","♣"];
+  const RANKS=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+  const $pHand=document.getElementById("playerHand");
+  const $dHand=document.getElementById("dealerHand");
+  const $bjMsg=document.getElementById("bjMsg");
+  const $bjStart=document.getElementById("bjStart");
+  const $hit=document.getElementById("hit");
+  const $stand=document.getElementById("stand");
+  let BJ = null; // {deck, player, dealer, bet, active}
 
+  function freshDeck(){
+    const d=[]; for(const s of SUITS) for(const r of RANKS) d.push(r+s);
+    for(let i=d.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [d[i],d[j]]=[d[j],d[i]]; }
+    return d;
+  }
+  function cardVal(c){ const r=c.slice(0,-1); if(r==="A")return 11; if(["J","Q","K"].includes(r))return 10; return Number(r); }
+  function total(hand){
+    let t=hand.reduce((a,c)=>a+cardVal(c),0);
+    let aces=hand.filter(c=>c.startsWith("A")).length;
+    while(t>21 && aces){ t-=10; aces--; } return t;
+  }
   function cardEl(card){
     if(card==="🂠"){
-      var d=document.createElement("div");
-      d.className="card-face";
+      const d=document.createElement("div"); d.className="card-face";
       d.style.background="#1b2442"; d.style.borderColor="rgba(255,255,255,.2)"; d.style.color="#1b2442";
-      d.innerHTML='<div class="rank">?</div><div class="suit">?</div>';
-      return d;
+      d.innerHTML='<div class="rank">?</div><div class="suit">?</div>'; return d;
     }
-    var r=card.slice(0,-1), s=card.slice(-1);
-    var d=document.createElement("div");
-    d.className="card-face"+((s==="♥"||s==="♦")?" red":"");
-    d.innerHTML='<div class="rank">'+r+'</div><div class="suit">'+s+'</div>';
-    return d;
+    const r=card.slice(0,-1), s=card.slice(-1);
+    const d=document.createElement("div"); d.className="card-face"+((s==="♥"||s==="♦")?" red":"");
+    d.innerHTML='<div class="rank">'+r+'</div><div class="suit">'+s+'</div>'; return d;
   }
   function renderBJ(state){
     $pHand.innerHTML=""; $dHand.innerHTML="";
-    (state.player||[]).forEach(function(c){ $pHand.appendChild(cardEl(c)); });
-    (state.dealer||[]).forEach(function(c){ $dHand.appendChild(cardEl(c)); });
+    state.player.forEach(c=>$pHand.appendChild(cardEl(c)));
+    state.dealer.forEach(c=>$dHand.appendChild(cardEl(c)));
   }
 
-  $bjStart.addEventListener("click", async function(){
+  $bjStart.addEventListener("click", async ()=>{
     if(!currentUser) return;
-    $bjMsg.textContent="Раздача...";
-    var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "start" });
-    if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
-    currentUser.balance = data.balance;
-    renderBJ(data.state);
-    $bjMsg.textContent="Ваш ход: Взять или Хватит";
-    $hit.disabled=false; $stand.disabled=false;
-    updateBalanceUI();
+    if(currentUser.balance < 200){ $bjMsg.textContent="Недостаточно средств"; return; }
+    currentUser.balance -= 200; updateBalanceUI(); await saveBalance();
+    const deck=freshDeck(); const player=[deck.pop(),deck.pop()]; const dealer=[deck.pop(),deck.pop()];
+    BJ={deck,player,dealer,bet:200,active:true};
+    renderBJ({player, dealer:[dealer[0],"🂠"]});
+    $bjMsg.textContent="Ваш ход"; $hit.disabled=false; $stand.disabled=false;
   });
 
-  $hit.addEventListener("click", async function(){
-    var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "hit" });
-    if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
-    renderBJ(data.state);
-    if(data.state.outcome==="bust"){ $bjMsg.textContent="Перебор! Проигрыш."; $hit.disabled=true; $stand.disabled=true; }
+  $hit.addEventListener("click", ()=>{
+    if(!BJ?.active) return;
+    BJ.player.push(BJ.deck.pop());
+    renderBJ({ player:BJ.player, dealer:[BJ.dealer[0],"🂠"] });
+    const pt=total(BJ.player);
+    if(pt>21){ $bjMsg.textContent="Перебор!"; $hit.disabled=true; $stand.disabled=true; BJ.active=false; }
   });
 
-  $stand.addEventListener("click", async function(){
-    var data = await api("/api/play", { name: currentUser.name, game: "blackjack", action: "stand" });
-    if(!data.ok){ $bjMsg.textContent=data.error||"Ошибка"; return; }
-    currentUser.balance = data.balance;
-    renderBJ(data.state);
-    var win = (data.result && data.result.win) || 0;
+  $stand.addEventListener("click", async ()=>{
+    if(!BJ?.active) return;
+    while(total(BJ.dealer) < 17) BJ.dealer.push(BJ.deck.pop());
+    const pt=total(BJ.player), dt=total(BJ.dealer);
+    renderBJ({ player:BJ.player, dealer:BJ.dealer });
+
+    let win=0;
+    if (pt<=21 && (dt>21 || pt>dt)) win=400;
+    else if (pt===dt) win=200;
+
+    if (win){ currentUser.balance = toInt(currentUser.balance + win, 0); updateBalanceUI(); await saveBalance(); }
     $bjMsg.textContent = win ? ("Победа! +" + (win-200)) : "Проигрыш";
-    $hit.disabled=true; $stand.disabled=true; updateBalanceUI();
+    $hit.disabled=true; $stand.disabled=true; BJ.active=false;
   });
 
-  // ====== ROULETTE ======
-  var order=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
-  var reds=new Set([32,19,21,25,34,27,36,30,23,5,16,1,14,9,18,7,12,3]);
-  var seg=360/order.length;
-  var $wheel=document.getElementById("wheel");
-  var $roulMsg=document.getElementById("roulMsg");
-  var $pickColor=document.getElementById("pickColor");
-  var $pointer=document.getElementById("pointer");
+  // ====== РУЛЕТКА ======
+  const order=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+  const reds=new Set([32,19,21,25,34,27,36,30,23,5,16,1,14,9,18,7,12,3]);
+  const seg=360/order.length;
+  const $wheel=document.getElementById("wheel");
+  const $roulMsg=document.getElementById("roulMsg");
+  const $pickColor=document.getElementById("pickColor");
+  const $pointer=document.getElementById("pointer");
 
-  function spinToAngle(angle){
-    var turns=6+Math.floor(Math.random()*4);
-    var rot=turns*360 + angle;
+  function spinTo(angle){
+    const turns=6+Math.floor(Math.random()*4);
+    const rot=turns*360+angle;
     $wheel.style.transition="transform 3.2s cubic-bezier(.18,.75,.2,1)";
     $wheel.style.transform="rotate("+rot+"deg)";
   }
 
-  document.getElementById("spinRoulette").addEventListener("click", async function(){
+  document.getElementById("spinRoulette").addEventListener("click", async ()=>{
     if(!currentUser) return;
-    $roulMsg.textContent="Вращение…";
-    var data = await api("/api/play", { name: currentUser.name, game: "roulette", action: "spin", pick: $pickColor.value });
-    if(!data.ok){ $roulMsg.textContent=data.error||"Ошибка"; return; }
-    currentUser.balance = data.balance;
-    if(data.result && typeof data.result.angle==="number"){ spinToAngle(data.result.angle); }
-    setTimeout(function(){
-      var r=data.result; var win=r.win||0;
-      $pointer.classList.add("pointer-tick"); setTimeout(function(){ $pointer.classList.remove("pointer-tick"); }, 500);
-      $roulMsg.textContent="Выпало "+r.num+" ("+r.color+"). "+(win?("Выигрыш +"+win):"Проигрыш.");
-      updateBalanceUI();
+    const COST=150;
+    if (currentUser.balance < COST){ $roulMsg.textContent="Недостаточно средств"; return; }
+    // "Крутим"
+    const idx = Math.floor(Math.random()*order.length);
+    const num = order[idx];
+    const col = num===0 ? "green" : (reds.has(num) ? "red" : "black");
+    const pick = $pickColor.value;
+    let win = (pick===col) ? (col==="green" ? 1500 : 300) : 0;
+
+    currentUser.balance = toInt(currentUser.balance - COST + win, 0);
+    updateBalanceUI(); await saveBalance();
+
+    spinTo(360-(idx*seg+seg/2));
+    setTimeout(()=>{
+      $pointer.classList.add("pointer-tick"); setTimeout(()=> $pointer.classList.remove("pointer-tick"), 500);
+      $roulMsg.textContent = "Выпало "+num+" ("+col+"). " + (win?("Выигрыш +"+win):"Проигрыш.");
     }, 3300);
   });
 
-  // ====== MINES ======
-  var gridSize=5, totalCells=25;
-  var $minesGrid=document.getElementById("minesGrid");
-  var $minesMsg=document.getElementById("minesMsg");
-  var $minesBet=document.getElementById("minesBet");
-  var $minesCount=document.getElementById("minesCount");
-  var $minesStart=document.getElementById("minesStart");
-  var $minesCash=document.getElementById("minesCashout");
+  // ====== МИНЫ ======
+  const GRID=25;
+  const $minesGrid=document.getElementById("minesGrid");
+  const $minesMsg=document.getElementById("minesMsg");
+  const $minesBet=document.getElementById("minesBet");
+  const $minesCount=document.getElementById("minesCount");
+  const $minesStart=document.getElementById("minesStart");
+  const $minesCash=document.getElementById("minesCashout");
+  let mines=null, revealed=0, minesActive=false;
 
   function resetMinesUI(){
     $minesGrid.innerHTML="";
-    for(var i=0;i<totalCells;i++){
-      var cell=document.createElement("button");
-      cell.className="mine-cell"; cell.dataset.idx=String(i); cell.textContent="?"; cell.disabled=true;
-      (function(idx,el){ el.addEventListener("click", function(){ onMine(idx, el); }); })(i, cell);
+    for(let i=0;i<GRID;i++){
+      const cell=document.createElement("button");
+      cell.className="mine-cell"; cell.textContent="?"; cell.dataset.idx=i; cell.disabled=true;
+      cell.addEventListener("click", ()=>reveal(i,cell));
       $minesGrid.appendChild(cell);
     }
     $minesMsg.textContent="—"; $minesCash.disabled=true;
   }
   resetMinesUI();
 
-  function disableGrid(){ Array.prototype.forEach.call($minesGrid.children, function(c){ c.disabled=true; }); }
-  function enableGrid(){ Array.prototype.forEach.call($minesGrid.children, function(c){ c.disabled=false; }); }
+  function randomSet(count){
+    const s=new Set(); while(s.size<count) s.add(Math.floor(Math.random()*GRID)); return s;
+  }
+  function revealAll(){
+    Array.prototype.forEach.call($minesGrid.children,(c,i)=>{ c.disabled=true; if(mines.has(i)){ c.classList.add("boom"); c.textContent="💣"; }});
+  }
+  function payout(){
+    const bet = toInt($minesBet.value,100);
+    // простой рост множителя на каждом безопасном шаге
+    const mult = 1 + revealed * (0.12 + toInt($minesCount.value,5)/100);
+    const total = Math.floor(bet * mult);
+    return { total, profit: total - bet };
+  }
 
-  $minesStart.addEventListener("click", async function(){
+  $minesStart.addEventListener("click", async ()=>{
     if(!currentUser) return;
-    var bet=parseInt($minesBet.value||"100",10);
-    var cnt=parseInt($minesCount.value||"5",10);
-    $minesMsg.textContent="Игра началась!";
-    var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "start", bet: bet, mines: cnt });
-    if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
-    currentUser.balance = data.balance;
-    updateBalanceUI(); enableGrid(); $minesCash.disabled=true;
+    const bet = toInt($minesBet.value,100);
+    const count = Math.max(1, Math.min(24, toInt($minesCount.value,5)));
+    if (currentUser.balance < bet){ $minesMsg.textContent="Недостаточно средств"; return; }
+    currentUser.balance -= bet; updateBalanceUI(); await saveBalance();
+
+    mines = randomSet(count); revealed=0; minesActive=true;
+    Array.prototype.forEach.call($minesGrid.children, c=>{ c.disabled=false; c.classList.remove("revealed","boom"); c.textContent="?"; });
+    $minesMsg.textContent="Игра началась!"; $minesCash.disabled=true;
   });
 
-  async function onMine(idx, el){
-    var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "reveal", idx: idx });
-    if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
-    if(data.state && data.state.boom){
-      Array.prototype.forEach.call($minesGrid.children, function(c,i){ c.disabled=true; if(data.state.mines.includes(i)){ c.classList.add("boom"); c.textContent="💣"; } });
-      $minesMsg.textContent="💥 Мина! Ставка проиграна."; $minesCash.disabled=true;
+  async function reveal(i, el){
+    if(!minesActive) return;
+    if (mines.has(i)){
+      revealAll(); $minesMsg.textContent="💥 Мина!"; $minesCash.disabled=true; minesActive=false;
     }else{
-      el.classList.add("revealed"); el.textContent="💎"; el.disabled=true;
-      var pr=data.result||{total:0,profit:0};
-      $minesMsg.textContent="Безопасно! Профит: +"+pr.profit; $minesCash.disabled=false;
+      el.classList.add("revealed"); el.textContent="💎"; el.disabled=true; revealed++;
+      const pr = payout(); $minesMsg.textContent="Безопасно! Профит: +" + pr.profit; $minesCash.disabled=false;
+      if (revealed >= (GRID - mines.size)){ // всё безопасное открыто
+        await cashout(true);
+      }
     }
   }
 
-  $minesCash.addEventListener("click", async function(){
-    var data = await api("/api/play", { name: currentUser.name, game: "mines", action: "cashout" });
-    if(!data.ok){ $minesMsg.textContent=data.error||"Ошибка"; return; }
-    currentUser.balance = data.balance;
-    $minesMsg.textContent="Забрал +"+(data.result.profit)+". Итог: "+data.result.total+".";
-    updateBalanceUI(); disableGrid(); $minesCash.disabled=true;
-  });
+  async function cashout(auto){
+    if(!minesActive || revealed===0) return;
+    const pr = payout();
+    currentUser.balance += pr.total; // возвращаем ставку + профит, т.к. ставку уже списали
+    updateBalanceUI(); await saveBalance();
+    $minesMsg.textContent=(auto?"Все безопасные открыты! ":"")+"Забрал +" + pr.profit + ". Итог: " + pr.total + "."; 
+    minesActive=false; $minesCash.disabled=true;
+    Array.prototype.forEach.call($minesGrid.children, c=> c.disabled=true);
+  }
+  $minesCash.addEventListener("click", ()=> cashout(false));
   </script>
 </body>
 </html>
