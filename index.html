@@ -1,403 +1,101 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Lucky Box Casino</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8">
+  <title>Lucky Box Casino 🎰</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<!-- AUTH -->
-<div id="authPanel" class="card auth">
-  <h1 class="logo">Lucky Box Casino</h1>
-  <p class="note">Вход или регистрация по нику (MockAPI сохраняет баланс)</p>
-
-  <input id="nickname" placeholder="Никнейм" maxlength="24" />
-
-  <div style="display:flex;justify-content:center;gap:10px;margin-top:10px;">
-    <button class="btn" id="loginBtn">Войти</button>
-    <button class="btn ghost" id="registerBtn">Регистрация</button>
+  <div id="authPanel">
+    <h1>Lucky Box Casino</h1>
+    <input id="nickname" placeholder="Введите ник">
+    <button id="loginBtn">Войти</button>
+    <p id="authMsg"></p>
   </div>
 
-  <p id="authMsg" class="msg">—</p>
-</div>
+  <div id="casino" class="hidden">
+    <div class="topbar">
+      <span>Игрок: <b id="userDisplay"></b></span>
+      <span>Баланс: <b id="balance"></b></span>
+      <button id="logoutBtn">Выйти</button>
+    </div>
 
+    <div class="tabs">
+      <button class="tab" data-game="slots">🎰 Слоты</button>
+      <button class="tab" data-game="blackjack">🃏 Блэкджек</button>
+      <button class="tab" data-game="roulette">🎡 Рулетка</button>
+      <button class="tab" data-game="mines">💣 Мины</button>
+    </div>
 
-  <!-- CASINO -->
-  <div id="casino" class="container hidden">
-    <header class="topbar">
-      <div class="brand">🎲 Lucky Box</div>
-      <div class="pill">
-        Привет, <b id="userDisplay">—</b>! Баланс: <b id="balance">0</b> 💰
-      </div>
-      <button class="btn danger" id="logoutBtn">🚪 Выйти</button>
-    </header>
-
-    <nav class="tabs">
-      <button class="tab-btn active" data-tab="tab-slots">🎰 Слоты</button>
-      <button class="tab-btn" data-tab="tab-bj">🃏 Блэкджек</button>
-      <button class="tab-btn" data-tab="tab-roulette">🎡 Рулетка</button>
-      <button class="tab-btn" data-tab="tab-mines">💣 Мины</button>
-    </nav>
-
-    <!-- СЛОТЫ -->
-    <section id="tab-slots" class="card">
-      <h2>Слоты</h2>
-      <div class="slot-wrap">
-        <div class="reels" id="reels"></div>
-        <div class="controls">
-          <button class="btn" id="spin">Крутить (-100)</button>
-          <p id="slotMsg" class="msg">—</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- БЛЭКДЖЕК -->
-    <section id="tab-bj" class="card hidden">
-      <h2>Блэкджек</h2>
-      <div class="table">
-        <div class="msg faint">Цель: набрать ближе к 21, чем дилер</div>
-        <div class="hands">
-          <div>
-            <h3>Игрок</h3>
-            <div class="hand" id="playerHand"></div>
-          </div>
-          <div>
-            <h3>Дилер</h3>
-            <div class="hand" id="dealerHand"></div>
-          </div>
-        </div>
-        <div class="bj-ctrls">
-          <button class="btn" id="hit">Взять</button>
-          <button class="btn" id="stand">Хватит (-200)</button>
-          <button class="btn ghost" id="bjReset">Сброс</button>
-        </div>
-        <div id="bjMsg" class="msg">—</div>
-      </div>
-    </section>
-
-    <!-- РУЛЕТКА -->
-    <section id="tab-roulette" class="card hidden">
-      <h2>Рулетка</h2>
-      <div class="roulette">
-        <div class="wheel-area">
-          <div class="pointer" id="pointer"></div>
-          <div class="wheel" id="wheel"><div class="face"></div></div>
-        </div>
-        <div class="row">
-          <label class="pill">Ставка на цвет:
-            <select id="pickColor">
-              <option value="red">красное</option>
-              <option value="black">чёрное</option>
-              <option value="green">зеро</option>
-            </select>
-          </label>
-          <button class="btn" id="spinRoulette">Вращать (-150)</button>
-        </div>
-        <div id="roulMsg" class="msg">—</div>
-      </div>
-    </section>
-
-    <!-- МИНЫ -->
-    <section id="tab-mines" class="card hidden">
-      <h2>Мины</h2>
-      <div class="mines-wrap">
-        <div class="row wrap">
-          <label class="pill">Ставка:
-            <input id="minesBet" type="number" min="1" value="100" />
-          </label>
-          <label class="pill">Мин:
-            <input id="minesCount" type="number" min="1" max="24" value="5" />
-          </label>
-          <button class="btn" id="minesStart">Начать</button>
-          <button class="btn" id="minesCashout" disabled>Забрать выигрыш</button>
-        </div>
-        <div class="mines-grid" id="minesGrid"></div>
-        <div id="minesMsg" class="msg">—</div>
-      </div>
-    </section>
+    <div id="gameArea">
+      <button id="playBtn">Играть</button>
+      <p id="gameMsg"></p>
+    </div>
   </div>
 
-  <!-- JS -->
-  <script>
-"use strict";
-
-// == DevTools & Keys protection (lightweight) ==
-// Вставь этот блок в начало <script> в index.html
-
-(function () {
-  "use strict";
-
-  // --- Блокировка контекстного меню и мыши ---
-  document.addEventListener("contextmenu", function (e) {
-    e.preventDefault();
-  }, { capture: true });
-
-  // --- Блокировка горячих клавиш DevTools / view-source ---
-  document.addEventListener("keydown", function (e) {
-    // F12
-    if (e.key === "F12" || e.keyCode === 123) {
-      e.preventDefault();
-      return false;
-    }
-    // Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C
-    if (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "C")) {
-      e.preventDefault();
-      return false;
-    }
-    // Ctrl+U (View Source)
-    if (e.ctrlKey && (e.key === "u" || e.key === "U" || e.keyCode === 85)) {
-      e.preventDefault();
-      return false;
-    }
-    // Ctrl+Shift+K (Firefox console)
-    if (e.ctrlKey && e.shiftKey && (e.key === "K" || e.key === "k")) {
-      e.preventDefault();
-      return false;
-    }
-  }, { capture: true });
-
-  // --- Простая детекция открытия DevTools по размерам окна ---
-  // Порог можно подправить (в пикселях)
-  const DEVTOOLS_THRESHOLD = 160;
-  let devtoolsOpen = false;
-
-  function checkDevToolsBySize() {
-    const widthDiff = Math.abs(window.outerWidth - window.innerWidth);
-    const heightDiff = Math.abs(window.outerHeight - window.innerHeight);
-    return (widthDiff > DEVTOOLS_THRESHOLD) || (heightDiff > DEVTOOLS_THRESHOLD);
-  }
-
-  function onDevtoolsOpen() {
-    if (devtoolsOpen) return;
-    devtoolsOpen = true;
-    try {
-      // реакция: скрыть интерфейс / показать предупреждение / редирект
-      // Ниже — пример: показываем баннер и затем перезагружаем страницу
-      alert("Доступ к инструментам разработчика обнаружен. Действие заблокировано.");
-      // Можно заменить на: location.reload(); или скрыть важные элементы:
-      // document.body.innerHTML = "<h2>Доступ запрещён</h2>";
-    } catch (e) { /* ignore */ }
-  }
-
-  function onDevtoolsClose() {
-    devtoolsOpen = false;
-  }
-
-  // Интервал для проверки
-  setInterval(function () {
-    if (checkDevToolsBySize()) {
-      onDevtoolsOpen();
-    } else {
-      if (devtoolsOpen) onDevtoolsClose();
-    }
-  }, 800);
-
-  // --- Дополнительная (опциональная) проверка: попытка "консольного" детектирования ---
-  // Этот трюк использует getter — не всегда надёжен, можно отключить если мешает.
-  try {
-    const element = new Image();
-    Object.defineProperty(element, "id", {
-      get: function () {
-        onDevtoolsOpen(); // если консоль пытаются прочитать объект, сработает
-      }
-    });
-    // Выводим объект в консоль — когда DevTools открыт, браузер попытается вывести и вызовет getter
-    console.log(element);
-  } catch (e) { /* ignore for older browsers */ }
-
-})();
-
-/************* MOCKAPI CONFIG *************/
-var API_URL = "https://69147b693746c71fe0486c2c.mockapi.io/users"; // твой настоящий URL
-
-async function apiFindByName(name) {
-  try {
-    const res = await fetch(API_URL + "?name=" + encodeURIComponent(name));
-    if (!res.ok) throw new Error("Fetch error " + res.status);
-    return res.json();
-  } catch (e) {
-    console.error("Find error:", e);
-    return [];
-  }
-}
-
-async function apiCreate(name, balance) {
-  try {
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name, balance: balance })
-    });
-    if (!res.ok) throw new Error("Create error " + res.status);
-    return res.json();
-  } catch (e) {
-    console.error("Create error:", e);
-    return null;
-  }
-}
-
-async function apiUpdate(id, payload) {
-  try {
-    if (!id) throw new Error("No user ID for update");
-    const res = await fetch(API_URL + "/" + encodeURIComponent(id), {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) throw new Error("Update error " + res.status);
-  } catch (e) {
-    console.warn("Save failed:", e);
-  }
-}
-
-/************* AUTH *************/
+<script>
+let currentUser = null;
 const $auth = document.getElementById("authPanel");
 const $casino = document.getElementById("casino");
-const $authMsg = document.getElementById("authMsg");
-const $nick = document.getElementById("nickname");
-const $user = document.getElementById("userDisplay");
 const $bal = document.getElementById("balance");
-let currentUser = null;
+const $user = document.getElementById("userDisplay");
+const $msg = document.getElementById("authMsg");
+const $gmsg = document.getElementById("gameMsg");
+let currentGame = "slots";
 
-function updateBalanceUI() {
-  $bal.textContent = currentUser.balance;
-  $bal.parentElement.classList.add("shine");
-  setTimeout(() => $bal.parentElement.classList.remove("shine"), 600);
-}
+// === Авторизация ===
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const name = document.getElementById("nickname").value.trim();
+  if (!name) return $msg.textContent = "Введите ник";
+
+  $msg.textContent = "Вход...";
+  const res = await fetch("/api/login", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name })
+  });
+  const data = await res.json();
+  if (!data.ok) return $msg.textContent = data.error || "Ошибка";
+  currentUser = data.user;
+  openCasino();
+});
 
 function openCasino() {
   $auth.classList.add("hidden");
   $casino.classList.remove("hidden");
-  document.querySelector('[data-tab="tab-slots"]').click();
   $user.textContent = currentUser.name;
-  updateBalanceUI();
+  $bal.textContent = currentUser.balance;
 }
 
-document.getElementById("loginBtn").addEventListener("click", async () => {
-  const nick = $nick.value.trim();
-  if (!nick) { $authMsg.textContent = "Введите ник"; return; }
-  $authMsg.textContent = "Загрузка...";
-
-  try {
-    const found = await apiFindByName(nick);
-
-    if (Array.isArray(found) && found.length > 0 && found[0].id) {
-      currentUser = { id: found[0].id, name: found[0].name, balance: found[0].balance };
-      $authMsg.textContent = "Добро пожаловать!";
-    } else {
-      const u = await apiCreate(nick, 1000);
-      if (!u || !u.id) {
-        $authMsg.textContent = "Ошибка создания пользователя!";
-        console.error("API create returned:", u);
-        return;
-      }
-      currentUser = { id: u.id, name: u.name, balance: u.balance };
-      $authMsg.textContent = "Создан новый аккаунт";
-    }
-
-    openCasino();
-  } catch (e) {
-    console.error(e);
-    $authMsg.textContent = "Ошибка связи с MockAPI";
-  }
-});
-
-document.getElementById("logoutBtn").addEventListener("click", () => location.reload());
-
-async function saveBalance() {
-  if (!currentUser || !currentUser.id) return;
-  await apiUpdate(currentUser.id, { name: currentUser.name, balance: currentUser.balance });
-}
-
-/************* TABS *************/
-document.querySelectorAll(".tab-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+// === Переключение вкладок ===
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.onclick = () => {
+    currentGame = btn.dataset.game;
+    document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
-    document.querySelectorAll("section.card").forEach(s => s.classList.add("hidden"));
-    document.getElementById(btn.dataset.tab).classList.remove("hidden");
-  });
+    $gmsg.textContent = "Выбрана игра: " + btn.textContent;
+  };
 });
 
-/************* SLOTS *************/
-const symbols = ["🍒", "🍋", "⭐", "🔔", "🍀", "7️⃣", "💎", "🍉"];
-const $reels = document.getElementById("reels");
-let reelEls = [];
-
-function makeStrip(result) {
-  const strip = document.createElement("div");
-  strip.className = "strip";
-  strip.style.top = "-360px";
-  for (let i = 0; i < 3; i++) {
-    const c = document.createElement("div");
-    c.className = "cell";
-    c.textContent = result[i];
-    strip.appendChild(c);
-  }
-  for (let j = 0; j < 3; j++) {
-    const c2 = document.createElement("div");
-    c2.className = "cell";
-    c2.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-    strip.appendChild(c2);
-  }
-  return strip;
-}
-
-function initSlotsUI() {
-  $reels.innerHTML = "";
-  reelEls = [];
-  for (let i = 0; i < 5; i++) {
-    const reel = document.createElement("div");
-    reel.className = "reel";
-    const res = [0, 1, 2].map(() => symbols[Math.floor(Math.random() * symbols.length)]);
-    reel.appendChild(makeStrip(res));
-    $reels.appendChild(reel);
-    reelEls.push(reel);
-  }
-}
-initSlotsUI();
-
-const slotMsg = document.getElementById("slotMsg");
-document.getElementById("spin").addEventListener("click", async () => {
-  const cost = 100;
-  if (currentUser.balance < cost) { slotMsg.textContent = "Недостаточно средств"; return; }
-  currentUser.balance -= cost; updateBalanceUI(); await saveBalance();
-
-  const reelsWrap = document.querySelector(".reels");
-  reelsWrap.classList.add("shake");
-  setTimeout(() => reelsWrap.classList.remove("shake"), 900);
-  slotMsg.textContent = "Крутим…";
-
-  const strips = [];
-  reelEls.forEach(reel => {
-    const result = [0, 1, 2].map(() => symbols[Math.floor(Math.random() * symbols.length)]);
-    const st = makeStrip(result);
-    reel.innerHTML = "";
-    reel.appendChild(st);
-    strips.push(st);
+// === Играть ===
+document.getElementById("playBtn").addEventListener("click", async () => {
+  if (!currentUser) return;
+  $gmsg.textContent = "Запуск...";
+  const body = { name: currentUser.name, game: currentGame, action: "spin" };
+  const res = await fetch("/api/play", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
   });
-  strips.forEach((st, i) => setTimeout(() => st.parentElement.classList.add("spinning"), i * 120));
-
-  setTimeout(async () => {
-    reelEls.forEach(reel => {
-      const st = reel.querySelector(".strip");
-      st.style.top = "0px";
-      st.style.transform = "none";
-      reel.classList.remove("spinning");
-    });
-    let win = 0; const r = Math.random();
-    if (r < 0.06) win = 800; else if (r < 0.18) win = 200;
-    if (win) {
-      currentUser.balance += win;
-      slotMsg.textContent = "🎉 Выигрыш +" + win;
-      slotMsg.classList.add("glow");
-      setTimeout(() => slotMsg.classList.remove("glow"), 800);
-    } else { slotMsg.textContent = "Проигрыш"; }
-    updateBalanceUI(); await saveBalance();
-  }, 1800);
+  const data = await res.json();
+  if (data.error) return $gmsg.textContent = data.error;
+  if (data.ok) {
+    $bal.textContent = data.balance;
+    if (data.win > 0) $gmsg.textContent = `🎉 Выигрыш: +${data.win}`;
+    else $gmsg.textContent = "❌ Проигрыш";
+  }
 });
+
+// === Выход ===
+document.getElementById("logoutBtn").onclick = () => location.reload();
 </script>
-
 </body>
 </html>

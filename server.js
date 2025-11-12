@@ -1,119 +1,130 @@
+// server.js
 import express from "express";
-import fs from "fs";
+import fetch from "node-fetch";
 
 const app = express();
-const FILE = "users.txt";
-
+app.use(express.json());
 app.use(express.static("."));
 
-// чтение users.txt -> объект
-function readUsers() {
-  if (!fs.existsSync(FILE)) return {};
-  const raw = fs.readFileSync(FILE, "utf8").trim();
-  if (!raw) return {};
-  const users = {};
-  raw.split("\n").forEach((line) => {
-    const [name, bal] = line.split(":");
-    users[name] = { name, balance: parseInt(bal, 10) || 0 };
+// === Твоя MockAPI база ===
+const MOCK_URL = "https://69147b693746c71fe0486c2c.mockapi.io/users";
+
+// ====== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ======
+async function getUser(name) {
+  const res = await fetch(`${MOCK_URL}?name=${encodeURIComponent(name)}`);
+  const data = await res.json();
+  return data[0];
+}
+
+async function createUser(name) {
+  const res = await fetch(MOCK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, balance: 1000 })
   });
-  return users;
+  return res.json();
 }
 
-// сохранение объекта -> users.txt
-function saveUsers(users) {
-  const text = Object.values(users)
-    .map((u) => `${u.name}:${u.balance}`)
-    .join("\n");
-  fs.writeFileSync(FILE, text);
+async function updateBalance(id, name, balance) {
+  await fetch(`${MOCK_URL}/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, balance })
+  });
 }
 
-/************* AUTH *************/
-const $auth = document.getElementById("authPanel");
-const $casino = document.getElementById("casino");
-const $authMsg = document.getElementById("authMsg");
-const $nick = document.getElementById("nickname");
-const $user = document.getElementById("userDisplay");
-const $bal = document.getElementById("balance");
-let currentUser = null;
-
-function updateBalanceUI() {
-  $bal.textContent = currentUser.balance;
-  $bal.parentElement.classList.add("shine");
-  setTimeout(() => $bal.parentElement.classList.remove("shine"), 600);
+function random() {
+  return Math.random();
 }
 
-function openCasino() {
-  $auth.classList.add("hidden");
-  $casino.classList.remove("hidden");
-  document.querySelector('[data-tab="tab-slots"]').click();
-  $user.textContent = currentUser.name;
-  updateBalanceUI();
-}
-
-/* === Вход === */
-document.getElementById("loginBtn").addEventListener("click", async () => {
-  const nick = $nick.value.trim();
-  if (!nick) { $authMsg.textContent = "Введите ник"; return; }
-  $authMsg.textContent = "Проверка...";
+// ====== API: /api/login ======
+app.post("/api/login", async (req, res) => {
   try {
-    const found = await apiFindByName(nick);
-    if (Array.isArray(found) && found.length > 0) {
-      const u = found[0];
-      currentUser = { id: u.id, name: u.name, balance: u.balance };
-      $authMsg.textContent = "Добро пожаловать, " + u.name + "!";
-      openCasino();
-    } else {
-      $authMsg.textContent = "Пользователь не найден!";
-    }
+    const name = String(req.body.name || "").trim();
+    if (!name) return res.json({ error: "Введите ник" });
+
+    let user = await getUser(name);
+    if (!user) user = await createUser(name);
+
+    res.json({ ok: true, user });
   } catch (e) {
-    console.error(e);
-    $authMsg.textContent = "Ошибка связи с MockAPI";
+    console.error("Login error", e);
+    res.status(500).json({ error: "Ошибка сервера" });
   }
 });
 
-/* === Регистрация === */
-document.getElementById("registerBtn").addEventListener("click", async () => {
-  const nick = $nick.value.trim();
-  if (!nick) { $authMsg.textContent = "Введите ник"; return; }
-  $authMsg.textContent = "Создание аккаунта...";
+// ====== API: /api/play ======
+app.post("/api/play", async (req, res) => {
   try {
-    const found = await apiFindByName(nick);
-    if (Array.isArray(found) && found.length > 0) {
-      $authMsg.textContent = "Такой ник уже занят!";
-      return;
+    const { name, game, action, pick, mines } = req.body;
+    if (!name || !game) return res.json({ error: "Неверные данные" });
+
+    let user = await getUser(name);
+    if (!user) return res.json({ error: "Пользователь не найден" });
+
+    let balance = parseInt(user.balance);
+    let win = 0;
+    let cost = 0;
+
+    // === Игры ===
+    if (game === "slots" && action === "spin") {
+      cost = 100;
+      if (balance < cost) return res.json({ error: "Недостаточно средств" });
+
+      balance -= cost;
+      const r = random();
+      if (r < 0.06) win = 800;        // 6% шанс
+      else if (r < 0.18) win = 200;   // 12% шанс
+      balance += win;
     }
-    const u = await apiCreate(nick, 1000);
-    if (!u || !u.id) {
-      $authMsg.textContent = "Ошибка создания!";
-      return;
+
+    else if (game === "roulette" && action === "spin") {
+      cost = 150;
+      if (balance < cost) return res.json({ error: "Недостаточно средств" });
+      balance -= cost;
+
+      const colors = ["red", "black", "green"];
+      const result = colors[Math.floor(random() * colors.length)];
+
+      if (result === pick) {
+        if (pick === "green") win = 1500; // зеро 10×
+        else win = 300;                   // обычный 2×
+      }
+      balance += win;
+      return res.json({ ok: true, result, win, balance });
     }
-    currentUser = { id: u.id, name: u.name, balance: u.balance };
-    $authMsg.textContent = "Аккаунт создан, добро пожаловать!";
-    openCasino();
+
+    else if (game === "blackjack") {
+      cost = 200;
+      if (balance < cost) return res.json({ error: "Недостаточно средств" });
+      balance -= cost;
+      const player = Math.floor(random() * 11) + 15;
+      const dealer = Math.floor(random() * 11) + 15;
+      if (player > 21) win = 0;
+      else if (dealer > 21 || player > dealer) win = 400;
+      else if (player === dealer) win = 200;
+      balance += win;
+    }
+
+    else if (game === "mines") {
+      cost = 100;
+      if (balance < cost) return res.json({ error: "Недостаточно средств" });
+      balance -= cost;
+
+      const safeChance = 1 - mines / 25;
+      if (random() < safeChance) win = Math.floor(100 * (1 / safeChance) * 0.9);
+      balance += win;
+    }
+
+    await updateBalance(user.id, name, balance);
+    res.json({ ok: true, game, win, balance });
+
   } catch (e) {
-    console.error(e);
-    $authMsg.textContent = "Ошибка связи с MockAPI";
+    console.error("Play error:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
   }
 });
 
-document.getElementById("logoutBtn").addEventListener("click", () => location.reload());
-
-async function saveBalance() {
-  if (!currentUser || !currentUser.id) return;
-  await apiUpdate(currentUser.id, { name: currentUser.name, balance: currentUser.balance });
-}
-
-// сохранение баланса
-app.get("/save", (req, res) => {
-  const name = String(req.query.name || "").trim();
-  const balance = parseInt(String(req.query.balance || "0"), 10) || 0;
-  if (!name) return res.json({ error: "Нет имени" });
-  const users = readUsers();
-  if (!users[name]) users[name] = { name, balance: 1000 };
-  users[name].balance = Math.max(0, balance);
-  saveUsers(users);
-  res.json({ ok: true });
-});
-
+// ====== ЗАПУСК ======
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🎰 Lucky Box server on :${PORT}`));
+app.listen(PORT, () => console.log(`🎰 Lucky Box Casino запущен на порту ${PORT}`));
