@@ -7,14 +7,21 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- AUTH -->
-  <div id="authPanel" class="card auth">
-    <h1 class="logo">Lucky Box Casino</h1>
-    <p class="note">Вход по нику. Баланс хранится в облаке (MockAPI).</p>
-    <input id="nickname" placeholder="Никнейм" maxlength="24" />
-    <button class="btn" id="loginBtn">Войти / Зарегистрироваться</button>
-    <p id="authMsg" class="msg">—</p>
+<!-- AUTH -->
+<div id="authPanel" class="card auth">
+  <h1 class="logo">Lucky Box Casino</h1>
+  <p class="note">Вход или регистрация по нику (MockAPI сохраняет баланс)</p>
+
+  <input id="nickname" placeholder="Никнейм" maxlength="24" />
+
+  <div style="display:flex;justify-content:center;gap:10px;margin-top:10px;">
+    <button class="btn" id="loginBtn">Войти</button>
+    <button class="btn ghost" id="registerBtn">Регистрация</button>
   </div>
+
+  <p id="authMsg" class="msg">—</p>
+</div>
+
 
   <!-- CASINO -->
   <div id="casino" class="container hidden">
