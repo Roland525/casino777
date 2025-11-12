@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Casino</title>
+</head>
+<body>
+  <h1>Lucky Box Casino</h1>
+  <button onclick="register()">Создать игрока</button>
+  <button onclick="getData()">Показать базу</button>
+  <pre id="output"></pre>
+
+  <script>
+    async function register() {
+      const nick = prompt("Введите ник:");
+      if (!nick) return;
+      const res = await fetch("/add?name=" + nick);
+      alert(await res.text());
+    }
+
+    async function getData() {
+      const res = await fetch("/data");
+      document.getElementById("output").textContent = await res.text();
+    }
+  </script>
+</body>
+</html>
