@@ -47,7 +47,7 @@
     <section id="tab-bj" class="card hidden">
       <h2>Блэкджек</h2>
       <div class="table">
-        <div class="msg faint">Ставка: 200. Цель — ближе к 21, чем дилер.</div>
+        <div class="msg faint">Ставка: 200</div>
         <div class="hands">
           <div>
             <h3>Игрок</h3>
@@ -112,10 +112,10 @@
   <script>
   "use strict";
 
-  // ====== Конфиг MockAPI (ПРОВЕРЬ, ЧТО /users — ТВОЙ РЕСУРС!) ======
+  /* ====== MockAPI config ====== */
   const MOCK_URL = "https://69147b693746c71fe0486c2c.mockapi.io/users";
 
-  // ====== Селекторы и состояние ======
+  /* ====== State & helpers ====== */
   const $auth = document.getElementById("authPanel");
   const $casino = document.getElementById("casino");
   const $authMsg = document.getElementById("authMsg");
@@ -124,8 +124,46 @@
   const $bal = document.getElementById("balance");
   let currentUser = null;
 
-  // ====== Утилиты ======
-  function toInt(x, def=0){ const n = Number(x); return Number.isFinite(n)? n : def; }
+  const toInt = (x, d=0) => {
+    const n = Number(x);
+    return Number.isFinite(n) ? Math.trunc(n) : d;
+  };
+
+  const req = async (url, opts={}) => {
+    try{
+      const r = await fetch(url, opts);
+      const text = await r.text();
+      let data = null; try{ data = text? JSON.parse(text): null; }catch{}
+      return { ok:r.ok, status:r.status, data };
+    }catch(e){
+      return { ok:false, status:0, data:null, error: e?.message||String(e) };
+    }
+  };
+
+  async function findUserByName(name){
+    const q = await req(`${MOCK_URL}?name=${encodeURIComponent(name)}`);
+    if (q.ok && Array.isArray(q.data)) return q.data[0] || null;
+    const all = await req(MOCK_URL); // fallback
+    if (all.ok && Array.isArray(all.data)){
+      return all.data.find(u => String(u?.name||"").trim() === String(name).trim()) || null;
+    }
+    return null;
+  }
+  async function createUser(name){
+    const r = await req(MOCK_URL, {
+      method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ name, balance: 1000 })
+    });
+    return r.ok ? r.data : null;
+  }
+  async function saveBalance(){
+    if(!currentUser?.id) return;
+    await req(`${MOCK_URL}/${currentUser.id}`, {
+      method:"PUT", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ name: currentUser.name, balance: toInt(currentUser.balance,0) })
+    });
+  }
+
   function updateBalanceUI(){
     $bal.textContent = toInt(currentUser?.balance, 0);
     $bal.parentElement.classList.add("shine");
@@ -139,51 +177,7 @@
     updateBalanceUI();
   }
 
-  async function req(url, opts={}){
-    try{
-      const r = await fetch(url, opts);
-      // MockAPI на ошибках иногда возвращает не-JSON — ловим аккуратно
-      const text = await r.text();
-      try { return { ok:r.ok, status:r.status, data: text ? JSON.parse(text) : null }; }
-      catch { return { ok:r.ok, status:r.status, data: null }; }
-    }catch(e){
-      return { ok:false, status:0, data:null, error:e?.message||String(e) };
-    }
-  }
-
-  // GET /users?name=... с fallback на /users (фильтрация на клиенте)
-  async function findUserByName(name){
-    const q = await req(`${MOCK_URL}?name=${encodeURIComponent(name)}`);
-    if (q.ok && Array.isArray(q.data)) return q.data[0] || null;
-
-    // fallback (если внезапно 404/500)
-    const all = await req(MOCK_URL);
-    if (all.ok && Array.isArray(all.data)){
-      return all.data.find(u => String(u?.name||"").trim() === String(name).trim()) || null;
-    }
-    return null;
-  }
-
-  async function createUser(name){
-    const r = await req(MOCK_URL, {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ name, balance: 1000 })
-    });
-    return r.ok ? r.data : null;
-  }
-
-  async function saveBalance(){
-    if(!currentUser?.id) return; // защита от /users/undefined
-    const body = { name: currentUser.name, balance: toInt(currentUser.balance,0) };
-    await req(`${MOCK_URL}/${currentUser.id}`, {
-      method:"PUT",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify(body)
-    });
-  }
-
-  // ====== Логин / Регистрация ======
+  /* ====== Auth ====== */
   document.getElementById("loginBtn").addEventListener("click", async ()=>{
     const nick = $nick.value.trim();
     if(!nick){ $authMsg.textContent="Введите ник"; return; }
@@ -198,10 +192,9 @@
     $authMsg.textContent="Готово!";
     openCasino();
   });
-
   document.getElementById("logoutBtn").addEventListener("click", ()=> location.reload());
 
-  // ====== Табы ======
+  /* ====== Tabs ====== */
   document.querySelectorAll(".tab-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
@@ -211,52 +204,89 @@
     });
   });
 
-  // ====== СЛОТЫ ======
+  /* ====== SLOTS ====== */
   const symbols = ["🍒","🍋","⭐","🔔","🍀","7️⃣","💎","🍉"];
   const $reels = document.getElementById("reels");
   const slotMsg = document.getElementById("slotMsg");
+  const SPIN_TIME = 1000; // ms
 
+  function buildReel(){
+    const reel = document.createElement("div");
+    reel.className = "reel";
+    const strip = document.createElement("div");
+    strip.className = "strip";
+    // длинная лента, чтобы было что крутить
+    for(let i=0;i<30;i++){
+      const c=document.createElement("div");
+      c.className="cell";
+      c.textContent = symbols[Math.floor(Math.random()*symbols.length)];
+      strip.appendChild(c);
+    }
+    reel.appendChild(strip);
+    return reel;
+  }
   function initSlotsUI(){
     $reels.innerHTML="";
-    for(let i=0;i<5;i++){
-      const reel=document.createElement("div");
-      reel.className="reel";
-      const strip=document.createElement("div");
-      strip.className="strip";
-      strip.style.top="-360px";
-      for(let j=0;j<6;j++){
-        const c=document.createElement("div");
-        c.className="cell";
-        c.textContent = symbols[Math.floor(Math.random()*symbols.length)];
-        strip.appendChild(c);
-      }
-      reel.appendChild(strip);
-      $reels.appendChild(reel);
-    }
+    for(let i=0;i<5;i++) $reels.appendChild(buildReel());
   }
   initSlotsUI();
+
+  function spinReelTo(reel, symbol){
+    // найдём индекс ближайшего появления символа в нижних 10 ячейках, чтобы остановить красиво
+    const strip = reel.firstChild;
+    const cells = Array.from(strip.children);
+    let targetIndex = -1;
+    for (let i=cells.length-10;i<cells.length;i++){
+      if (cells[i].textContent === symbol){ targetIndex = i; break; }
+    }
+    if (targetIndex === -1) targetIndex = cells.length - 1; // если вдруг не нашли
+    const cellH = 120; // высота .cell в десктопе; на мобиле ниже, но transition визуально ок
+    const targetY = -(targetIndex * cellH - 2*cellH); // останавливаем так, чтобы нужная оказалась во 2-й ячейке (центр)
+    strip.style.transition = `transform ${SPIN_TIME}ms cubic-bezier(.2,.7,.2,1)`;
+    strip.style.transform = `translateY(${targetY}px)`;
+  }
 
   document.getElementById("spin").addEventListener("click", async ()=>{
     if(!currentUser) return;
     const COST = 100;
     if (currentUser.balance < COST){ slotMsg.textContent="Недостаточно средств"; return; }
 
-    // RTP ~95%: 6% на 800, ~16% на 200
+    // считаем выигрыш (RTP около 95%)
     const r = Math.random();
     let win = 0;
-    if (r < 0.06) win = 800;
-    else if (r < 0.22) win = 200;
+    if (r < 0.06) win = 800;       // 6%
+    else if (r < 0.22) win = 200;  // 16%
+    const resultSymbols = [];
+    for(let i=0;i<5;i++){
+      // Итоговый ряд: если выигрыш крупный — больше 💎/7️⃣, иначе рандом
+      const pool = win>=800 ? ["💎","7️⃣","🍀","⭐"] : symbols;
+      resultSymbols.push(pool[Math.floor(Math.random()*pool.length)]);
+    }
 
-    currentUser.balance = toInt(currentUser.balance - COST + win, 0);
-    updateBalanceUI();
-    await saveBalance();
+    // запускаем анимацию каждого барабана к своему символу результата
+    Array.from($reels.children).forEach((reel,i)=>{
+      // перед каждым новым спином сбрасываем transform
+      const strip = reel.firstChild;
+      strip.style.transition="none";
+      strip.style.transform="translateY(0)";
+      // запускаем с небольшим смещением во времени
+      setTimeout(()=> spinReelTo(reel, resultSymbols[i]), i*120);
+    });
 
-    const reelsWrap=document.querySelector(".reels");
-    reelsWrap.classList.add("shake"); setTimeout(()=>reelsWrap.classList.remove("shake"),900);
-    slotMsg.textContent = win ? ("🎉 Выигрыш +" + win) : "Проигрыш";
+    // блокируем повторный клик на время спина
+    const btn = document.getElementById("spin");
+    btn.disabled = true;
+    slotMsg.textContent = "Крутим…";
+
+    setTimeout(async ()=>{
+      currentUser.balance = toInt(currentUser.balance - COST + win, 0);
+      updateBalanceUI(); await saveBalance();
+      slotMsg.textContent = win ? ("🎉 Выигрыш +" + win) : "Проигрыш";
+      btn.disabled = false;
+    }, SPIN_TIME + 200);
   });
 
-  // ====== БЛЭКДЖЕК ======
+  /* ====== BLACKJACK ====== */
   const SUITS=["♠","♥","♦","♣"];
   const RANKS=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
   const $pHand=document.getElementById("playerHand");
@@ -265,19 +295,16 @@
   const $bjStart=document.getElementById("bjStart");
   const $hit=document.getElementById("hit");
   const $stand=document.getElementById("stand");
-  let BJ = null; // {deck, player, dealer, bet, active}
+  let BJ = null; // {deck, player, dealer, active}
 
-  function freshDeck(){
+  const freshDeck = ()=>{
     const d=[]; for(const s of SUITS) for(const r of RANKS) d.push(r+s);
     for(let i=d.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [d[i],d[j]]=[d[j],d[i]]; }
     return d;
-  }
-  function cardVal(c){ const r=c.slice(0,-1); if(r==="A")return 11; if(["J","Q","K"].includes(r))return 10; return Number(r); }
-  function total(hand){
-    let t=hand.reduce((a,c)=>a+cardVal(c),0);
-    let aces=hand.filter(c=>c.startsWith("A")).length;
-    while(t>21 && aces){ t-=10; aces--; } return t;
-  }
+  };
+  const cardVal = c => { const r=c.slice(0,-1); if(r==="A")return 11; if(["J","Q","K"].includes(r))return 10; return Number(r); };
+  const total = hand => { let t=hand.reduce((a,c)=>a+cardVal(c),0), aces=hand.filter(c=>c.startsWith("A")).length; while(t>21&&aces){t-=10;aces--;} return t; };
+
   function cardEl(card){
     if(card==="🂠"){
       const d=document.createElement("div"); d.className="card-face";
@@ -288,83 +315,95 @@
     const d=document.createElement("div"); d.className="card-face"+((s==="♥"||s==="♦")?" red":"");
     d.innerHTML='<div class="rank">'+r+'</div><div class="suit">'+s+'</div>'; return d;
   }
-  function renderBJ(state){
+  function renderBJ(player, dealer, hideHole=true){
     $pHand.innerHTML=""; $dHand.innerHTML="";
-    state.player.forEach(c=>$pHand.appendChild(cardEl(c)));
-    state.dealer.forEach(c=>$dHand.appendChild(cardEl(c)));
+    player.forEach(c=> $pHand.appendChild(cardEl(c)));
+    (hideHole? [dealer[0],"🂠"] : dealer).forEach(c=> $dHand.appendChild(cardEl(c)));
   }
 
   $bjStart.addEventListener("click", async ()=>{
     if(!currentUser) return;
-    if(currentUser.balance < 200){ $bjMsg.textContent="Недостаточно средств"; return; }
-    currentUser.balance -= 200; updateBalanceUI(); await saveBalance();
-    const deck=freshDeck(); const player=[deck.pop(),deck.pop()]; const dealer=[deck.pop(),deck.pop()];
-    BJ={deck,player,dealer,bet:200,active:true};
-    renderBJ({player, dealer:[dealer[0],"🂠"]});
+    const BET=200;
+    if (currentUser.balance < BET){ $bjMsg.textContent="Недостаточно средств"; return; }
+    currentUser.balance -= BET; updateBalanceUI(); await saveBalance();
+
+    const deck=freshDeck(), player=[deck.pop(),deck.pop()], dealer=[deck.pop(),deck.pop()];
+    BJ={deck,player,dealer,bet:BET,active:true};
+    renderBJ(player, dealer, true);
     $bjMsg.textContent="Ваш ход"; $hit.disabled=false; $stand.disabled=false;
   });
 
   $hit.addEventListener("click", ()=>{
     if(!BJ?.active) return;
     BJ.player.push(BJ.deck.pop());
-    renderBJ({ player:BJ.player, dealer:[BJ.dealer[0],"🂠"] });
+    renderBJ(BJ.player, BJ.dealer, true);
     const pt=total(BJ.player);
-    if(pt>21){ $bjMsg.textContent="Перебор!"; $hit.disabled=true; $stand.disabled=true; BJ.active=false; }
+    if(pt>21){
+      $bjMsg.textContent="Перебор! Проигрыш.";
+      $hit.disabled=true; $stand.disabled=true; BJ.active=false;
+    }
   });
 
   $stand.addEventListener("click", async ()=>{
     if(!BJ?.active) return;
     while(total(BJ.dealer) < 17) BJ.dealer.push(BJ.deck.pop());
     const pt=total(BJ.player), dt=total(BJ.dealer);
-    renderBJ({ player:BJ.player, dealer:BJ.dealer });
+    renderBJ(BJ.player, BJ.dealer, false);
 
     let win=0;
-    if (pt<=21 && (dt>21 || pt>dt)) win=400;
-    else if (pt===dt) win=200;
+    if (pt<=21 && (dt>21 || pt>dt)) win = BJ.bet*2;   // 400
+    else if (pt===dt) win = BJ.bet;                   // 200 (push)
 
-    if (win){ currentUser.balance = toInt(currentUser.balance + win, 0); updateBalanceUI(); await saveBalance(); }
-    $bjMsg.textContent = win ? ("Победа! +" + (win-200)) : "Проигрыш";
+    if (win){
+      currentUser.balance = toInt(currentUser.balance + win, 0);
+      updateBalanceUI(); await saveBalance();
+    }
+    $bjMsg.textContent = win ? ("Победа! +" + (win - BJ.bet)) : "Проигрыш";
     $hit.disabled=true; $stand.disabled=true; BJ.active=false;
   });
 
-  // ====== РУЛЕТКА ======
+  /* ====== ROULETTE ====== */
   const order=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
   const reds=new Set([32,19,21,25,34,27,36,30,23,5,16,1,14,9,18,7,12,3]);
   const seg=360/order.length;
   const $wheel=document.getElementById("wheel");
   const $roulMsg=document.getElementById("roulMsg");
   const $pickColor=document.getElementById("pickColor");
+  const $spinRoulette=document.getElementById("spinRoulette");
   const $pointer=document.getElementById("pointer");
 
-  function spinTo(angle){
+  function spinToAngle(angle){
     const turns=6+Math.floor(Math.random()*4);
-    const rot=turns*360+angle;
+    const rot=turns*360 + angle;
     $wheel.style.transition="transform 3.2s cubic-bezier(.18,.75,.2,1)";
     $wheel.style.transform="rotate("+rot+"deg)";
   }
 
-  document.getElementById("spinRoulette").addEventListener("click", async ()=>{
+  $spinRoulette.addEventListener("click", async ()=>{
     if(!currentUser) return;
     const COST=150;
     if (currentUser.balance < COST){ $roulMsg.textContent="Недостаточно средств"; return; }
-    // "Крутим"
+    $spinRoulette.disabled = true;
+    $roulMsg.textContent="Вращение…";
+
     const idx = Math.floor(Math.random()*order.length);
     const num = order[idx];
-    const col = num===0 ? "green" : (reds.has(num) ? "red" : "black");
+    const color = (num===0) ? "green" : (reds.has(num) ? "red" : "black");
     const pick = $pickColor.value;
-    let win = (pick===col) ? (col==="green" ? 1500 : 300) : 0;
+    const win = (pick===color) ? (color==="green" ? 1500 : 300) : 0;
 
-    currentUser.balance = toInt(currentUser.balance - COST + win, 0);
-    updateBalanceUI(); await saveBalance();
+    spinToAngle(360-(idx*seg+seg/2));
 
-    spinTo(360-(idx*seg+seg/2));
-    setTimeout(()=>{
+    setTimeout(async ()=>{
+      currentUser.balance = toInt(currentUser.balance - COST + win, 0);
+      updateBalanceUI(); await saveBalance();
       $pointer.classList.add("pointer-tick"); setTimeout(()=> $pointer.classList.remove("pointer-tick"), 500);
-      $roulMsg.textContent = "Выпало "+num+" ("+col+"). " + (win?("Выигрыш +"+win):"Проигрыш.");
+      $roulMsg.textContent = "Выпало "+num+" ("+color+"). " + (win?("Выигрыш +"+win):"Проигрыш.");
+      $spinRoulette.disabled = false;
     }, 3300);
   });
 
-  // ====== МИНЫ ======
+  /* ====== MINES ====== */
   const GRID=25;
   const $minesGrid=document.getElementById("minesGrid");
   const $minesMsg=document.getElementById("minesMsg");
@@ -372,32 +411,33 @@
   const $minesCount=document.getElementById("minesCount");
   const $minesStart=document.getElementById("minesStart");
   const $minesCash=document.getElementById("minesCashout");
-  let mines=null, revealed=0, minesActive=false;
+  let mines=null, opened=new Set(), active=false, startBet=0;
 
   function resetMinesUI(){
     $minesGrid.innerHTML="";
     for(let i=0;i<GRID;i++){
       const cell=document.createElement("button");
       cell.className="mine-cell"; cell.textContent="?"; cell.dataset.idx=i; cell.disabled=true;
-      cell.addEventListener("click", ()=>reveal(i,cell));
+      cell.addEventListener("click", ()=>onReveal(i, cell));
       $minesGrid.appendChild(cell);
     }
     $minesMsg.textContent="—"; $minesCash.disabled=true;
   }
   resetMinesUI();
 
-  function randomSet(count){
-    const s=new Set(); while(s.size<count) s.add(Math.floor(Math.random()*GRID)); return s;
-  }
-  function revealAll(){
-    Array.prototype.forEach.call($minesGrid.children,(c,i)=>{ c.disabled=true; if(mines.has(i)){ c.classList.add("boom"); c.textContent="💣"; }});
-  }
-  function payout(){
-    const bet = toInt($minesBet.value,100);
-    // простой рост множителя на каждом безопасном шаге
-    const mult = 1 + revealed * (0.12 + toInt($minesCount.value,5)/100);
-    const total = Math.floor(bet * mult);
-    return { total, profit: total - bet };
+  function randomSet(count){ const s=new Set(); while(s.size<count) s.add(Math.floor(Math.random()*GRID)); return s; }
+  function enableGrid(v){ Array.from($minesGrid.children).forEach(c=> c.disabled=!v); }
+  function showAllMines(){ Array.from($minesGrid.children).forEach((c,i)=>{ if(mines.has(i)){ c.classList.add("boom"); c.textContent="💣"; } c.disabled=true; }); }
+
+  function currentPayout(){
+    // простая “честная” формула: каждая безопасная клетка повышает множитель ~ по обратной вероятности с маржой
+    const m = toInt($minesCount.value,5);
+    const safeLeft = (GRID - m) - opened.size;
+    const cellsLeft = GRID - opened.size;
+    const pSafe = Math.max(0.01, safeLeft / Math.max(1, cellsLeft));
+    const stepMult = Math.max(1.02, (1/pSafe)*0.95);
+    const total = Math.floor(startBet * Math.pow(stepMult, opened.size));
+    return { total, profit: total - startBet };
   }
 
   $minesStart.addEventListener("click", async ()=>{
@@ -407,32 +447,46 @@
     if (currentUser.balance < bet){ $minesMsg.textContent="Недостаточно средств"; return; }
     currentUser.balance -= bet; updateBalanceUI(); await saveBalance();
 
-    mines = randomSet(count); revealed=0; minesActive=true;
-    Array.prototype.forEach.call($minesGrid.children, c=>{ c.disabled=false; c.classList.remove("revealed","boom"); c.textContent="?"; });
+    startBet = bet;
+    mines = randomSet(count);
+    opened.clear();
+    active = true;
+    enableGrid(true);
+    Array.from($minesGrid.children).forEach(c=>{ c.classList.remove("revealed","boom"); c.textContent="?"; });
     $minesMsg.textContent="Игра началась!"; $minesCash.disabled=true;
   });
 
-  async function reveal(i, el){
-    if(!minesActive) return;
+  async function onReveal(i, el){
+    if(!active) return;
+    if (opened.has(i)) return;
+
     if (mines.has(i)){
-      revealAll(); $minesMsg.textContent="💥 Мина!"; $minesCash.disabled=true; minesActive=false;
-    }else{
-      el.classList.add("revealed"); el.textContent="💎"; el.disabled=true; revealed++;
-      const pr = payout(); $minesMsg.textContent="Безопасно! Профит: +" + pr.profit; $minesCash.disabled=false;
-      if (revealed >= (GRID - mines.size)){ // всё безопасное открыто
+      active = false;
+      showAllMines();
+      $minesMsg.textContent="💥 Мина! Ставка проиграна.";
+      $minesCash.disabled = true;
+    } else {
+      opened.add(i);
+      el.classList.add("revealed"); el.textContent="💎"; el.disabled=true;
+      const { profit } = currentPayout();
+      $minesMsg.textContent="Безопасно! Профит: +" + profit;
+      $minesCash.disabled = false;
+
+      if (opened.size >= (GRID - mines.size)){
+        // все безопасные открыты — автокэш-аут
         await cashout(true);
       }
     }
   }
 
   async function cashout(auto){
-    if(!minesActive || revealed===0) return;
-    const pr = payout();
-    currentUser.balance += pr.total; // возвращаем ставку + профит, т.к. ставку уже списали
+    if(!active || opened.size===0) return;
+    const { total, profit } = currentPayout();
+    currentUser.balance = toInt(currentUser.balance + total, 0);
     updateBalanceUI(); await saveBalance();
-    $minesMsg.textContent=(auto?"Все безопасные открыты! ":"")+"Забрал +" + pr.profit + ". Итог: " + pr.total + "."; 
-    minesActive=false; $minesCash.disabled=true;
-    Array.prototype.forEach.call($minesGrid.children, c=> c.disabled=true);
+    active = false; enableGrid(false);
+    $minesCash.disabled = true;
+    $minesMsg.textContent = (auto?"Все безопасные клетки открыты! ":"") + "Забрал +" + profit + ". Итог: " + total + ".";
   }
   $minesCash.addEventListener("click", ()=> cashout(false));
   </script>

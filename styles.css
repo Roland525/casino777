@@ -28,7 +28,6 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
   transition:transform .15s ease, filter .2s ease, box-shadow .2s ease
 }
 .btn:hover{transform:translateY(-2px);filter:brightness(1.12)}
-.btn.ghost{background:linear-gradient(135deg,#2b2f4a,#2b2f4a);color:#cfe5ff}
 .btn.danger{background:linear-gradient(135deg,#ff6b6b,#ff3b3b);color:white}
 .pill{display:inline-grid;grid-auto-flow:column;gap:8px;align-items:center;padding:10px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:var(--glass)}
 .msg{margin:8px 0;min-height:22px}
@@ -39,15 +38,14 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
 .tabs{display:flex;justify-content:center;gap:10px;margin:12px auto 18px;flex-wrap:wrap}
 .tab-btn{padding:10px 16px;border:none;border-radius:12px;background:linear-gradient(135deg,#203055,#2d3a61);color:#d3e7ff;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,.1)}
 .tab-btn.active{background:linear-gradient(135deg,var(--line),var(--accent));color:#0b0f1a;box-shadow:0 0 24px rgba(0,224,255,.45)}
+.shine{animation:flashWin .8s ease}
 
 /* SLOTS */
 .slot-wrap{display:grid;place-items:center;gap:10px}
-.reels{display:grid;grid-template-columns:repeat(5,100px);gap:10px}
+.reels{display:grid;grid-template-columns:repeat(5,100px);gap:10px;align-items:start}
 .reel{width:100px;height:120px;border-radius:14px;border:2px solid var(--line);background:#0c1430;overflow:hidden;position:relative}
-.strip{position:absolute;left:0;top:-360px;width:100%}
+.strip{position:absolute;left:0;top:0;width:100%}
 .cell{height:120px;display:grid;place-items:center;font-size:48px}
-.reels.shake{animation:shake .35s ease 3}
-.shine{animation:flashWin .8s ease}
 
 /* BLACKJACK */
 .table{background:radial-gradient(600px 240px at 50% -30%, rgba(0,224,255,.12), transparent 60%), #0d172d; border:1px solid rgba(255,255,255,.12);
