@@ -86,25 +86,31 @@ app.get("/api/user/:id", async (req, res) => {
 
 // 🔹 Сохранить баланс
 app.post("/api/saveBalance", async (req, res) => {
-  try {
-    const { id, balance } = req.body;
-    if (!id) return res.status(400).json({ error: "No id" });
+  console.log("💾 saveBalance", req.body);
 
+  const { id, balance } = req.body;
+
+  if (!id || balance === undefined) {
+    return res.json({ ok: false, error: "invalid_data" });
+  }
+
+  try {
     const r = await fetch(`${MOCK_URL}/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ balance })
     });
 
-    const updated = await r.json();
-    if (!updated?.id) throw new Error("Invalid update response");
+    const data = await r.json();
+    console.log("✅ Balance saved:", data);
 
-    res.json({ ok: true, user: updated });
-  } catch (e) {
-    console.error("saveBalance error:", e);
-    res.status(500).json({ error: "Save failed" });
+    res.json({ ok: true, user: data });
+  } catch (err) {
+    console.log("❌ MockAPI error:", err);
+    res.json({ ok: false, error: "mockapi_fail" });
   }
 });
+
 
 /* ===== SERVER ===== */
 app.listen(PORT, () =>
