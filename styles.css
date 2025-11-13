@@ -118,3 +118,9 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(0,224,255,.3)}
   .reel{width:70px;height:84px}
   .cell{font-size:30px;height:84px}
 }
+
+/* Crash */
+.crash-wrap { text-align: center; margin-top: 10px; }
+.crash-display { margin-top: 20px; }
+#crashMult { font-size: 3rem; color: #00ff9d; transition: all 0.2s ease; }
+#crashMult.glow { text-shadow: 0 0 15px #00ff9d; }

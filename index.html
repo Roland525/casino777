@@ -29,6 +29,7 @@
       <button class="tab-btn" data-tab="tab-bj">🃏 Блэкджек</button>
       <button class="tab-btn" data-tab="tab-roulette">🎡 Рулетка</button>
       <button class="tab-btn" data-tab="tab-mines">💣 Мины</button>
+      <button class="tab-btn" data-tab="tab-crash">🚀 Crash</button>
     </nav>
 
     <!-- СЛОТЫ -->
@@ -107,7 +108,26 @@
         <div id="minesMsg" class="msg">—</div>
       </div>
     </section>
+    
+<!-- CRASH -->
+<section id="tab-crash" class="card hidden">
+  <h2>🚀 Crash</h2>
+  <div class="crash-wrap">
+    <div class="row wrap">
+      <label class="pill">Ставка:
+        <input id="crashBet" type="number" min="10" value="100" />
+      </label>
+      <button class="btn" id="crashStart">Старт</button>
+      <button class="btn" id="crashCashout" disabled>Забрать</button>
+    </div>
+    <div class="crash-display">
+      <h1 id="crashMult">×1.00</h1>
+      <div id="crashStatus" class="msg">—</div>
+    </div>
   </div>
+</section>
+  </div>
+
 
   <script>
   "use strict";
@@ -522,6 +542,56 @@
     $minesMsg.textContent = (auto?"Все безопасные клетки открыты! ":"") + "Забрал +" + profit + ". Итог: " + total + ".";
   }
   $minesCash.addEventListener("click", ()=> cashout(false));
+  /* ====== CRASH ====== */
+const $crashBet=document.getElementById("crashBet");
+const $crashStart=document.getElementById("crashStart");
+const $crashCashout=document.getElementById("crashCashout");
+const $crashMult=document.getElementById("crashMult");
+const $crashStatus=document.getElementById("crashStatus");
+let crashActive=false, crashTimer=null, crashMult=1.0, crashCrashPoint=0;
+
+function randCrashPoint(){return (Math.random()**2.2)*10+1.05;}
+function resetCrashUI(){
+  crashActive=false;
+  clearInterval(crashTimer);
+  $crashMult.textContent="×1.00";
+  $crashCashout.disabled=true;
+  $crashStart.disabled=false;
+}
+
+$crashStart.addEventListener("click",async()=>{
+  if(!currentUser)return;
+  const bet=toInt($crashBet.value,100);
+  if(currentUser.balance<bet){$crashStatus.textContent="Недостаточно средств";return;}
+  currentUser.balance-=bet;await saveBalance();updateBalanceUI();
+  crashActive=true;crashMult=1.0;crashCrashPoint=randCrashPoint();
+  $crashStart.disabled=true;$crashCashout.disabled=false;
+  $crashStatus.textContent="🚀 Полёт начался!";
+
+  crashTimer=setInterval(()=>{
+    if(!crashActive)return;
+    crashMult=+(crashMult*1.015).toFixed(2);
+    $crashMult.textContent="×"+crashMult.toFixed(2);
+    if(crashMult>=crashCrashPoint){
+      clearInterval(crashTimer);crashActive=false;
+      $crashCashout.disabled=true;$crashStart.disabled=false;
+      $crashMult.textContent="💥 КРАШ";
+      $crashStatus.textContent="Проигрыш ×"+crashCrashPoint.toFixed(2);
+    }
+  },150);
+});
+
+$crashCashout.addEventListener("click",async()=>{
+  if(!crashActive)return;
+  crashActive=false;clearInterval(crashTimer);
+  const bet=toInt($crashBet.value,100);
+  const win=Math.floor(bet*crashMult);
+  currentUser.balance+=win;
+  await saveBalance();updateBalanceUI();
+  $crashCashout.disabled=true;$crashStart.disabled=false;
+  $crashStatus.textContent=`✅ Забрал ×${crashMult.toFixed(2)} = +${win}`;
+});
+
   </script>
 </body>
 </html>
