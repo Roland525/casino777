@@ -10,7 +10,7 @@
   <!-- AUTH -->
   <div id="authPanel" class="card auth">
     <h1 class="logo">Lucky Box Casino</h1>
-    <p class="note">Вход по нику. Баланс хранится в облаке (MockAPI).</p>
+    <p class="note">Вход по нику. Баланс хранится в облаке (MockAPI через сервер).</p>
     <input id="nickname" placeholder="Никнейм" maxlength="24" />
     <button class="btn" id="loginBtn">Войти / Зарегистрироваться</button>
     <p id="authMsg" class="msg">—</p>
@@ -108,34 +108,33 @@
         <div id="minesMsg" class="msg">—</div>
       </div>
     </section>
-    
-<!-- CRASH -->
-<section id="tab-crash" class="card hidden">
-  <h2>🚀 Crash</h2>
-  <div class="crash-wrap">
-    <div class="row wrap">
-      <label class="pill">Ставка:
-        <input id="crashBet" type="number" min="10" value="100" />
-      </label>
-      <button class="btn" id="crashStart">Старт</button>
-      <button class="btn" id="crashCashout" disabled>Забрать</button>
-    </div>
-    <div class="crash-display">
-      <h1 id="crashMult">×1.00</h1>
-      <div id="crashStatus" class="msg">—</div>
-    </div>
-  </div>
-</section>
-  </div>
 
+    <!-- CRASH -->
+    <section id="tab-crash" class="card hidden">
+      <h2>🚀 Crash</h2>
+      <div class="crash-wrap">
+        <div class="row wrap">
+          <label class="pill">Ставка:
+            <input id="crashBet" type="number" min="10" value="100" />
+          </label>
+          <button class="btn" id="crashStart">Старт</button>
+          <button class="btn" id="crashCashout" disabled>Забрать</button>
+        </div>
+        <div class="crash-display">
+          <h1 id="crashMult">×1.00</h1>
+          <div id="crashStatus" class="msg">—</div>
+        </div>
+      </div>
+    </section>
+  </div>
 
   <script>
   "use strict";
 
-  /* ====== MockAPI config ====== */
-  const MOCK_URL = "https://69147b693746c71fe0486c2c.mockapi.io/users";
+  /* ====== API URL ====== */
+  const API_URL = "https://casino777.onrender.com"; // ← адрес твоего Render-сервера
 
-  /* ====== State & helpers ====== */
+  /* ====== AUTH ====== */
   const $auth = document.getElementById("authPanel");
   const $casino = document.getElementById("casino");
   const $authMsg = document.getElementById("authMsg");
@@ -144,472 +143,206 @@
   const $bal = document.getElementById("balance");
   let currentUser = null;
 
-  const toInt = (x, d=0) => {
-    const n = Number(x);
-    return Number.isFinite(n) ? Math.trunc(n) : d;
-  };
-
-  const req = async (url, opts={}) => {
-    try{
-      const r = await fetch(url, opts);
-      const text = await r.text();
-      let data = null; try{ data = text? JSON.parse(text): null; }catch{}
-      return { ok:r.ok, status:r.status, data };
-    }catch(e){
-      return { ok:false, status:0, data:null, error: e?.message||String(e) };
-    }
-  };
-
-  async function findUserByName(name) {
-    // добавляем секретный ключ в запрос
-    const q = await req(`${MOCK_URL}?name=${encodeURIComponent(name)}&key=${SECRET_KEY}`);
-    
-    if (q.ok && Array.isArray(q.data)) 
-      return q.data[0] || null;
-
-    // fallback — если MockAPI не принимает фильтр, запрашиваем всех пользователей, но тоже с ключом
-    const all = await req(`${MOCK_URL}?key=${SECRET_KEY}`);
-    
-    if (all.ok && Array.isArray(all.data)) {
-      return all.data.find(u => 
-        String(u?.name || "").trim() === String(name).trim()
-      ) || null;
-    }
-
-    return null;
-  }
-
-  async function getUserById(id){ 
-    const r = await req(`${MOCK_URL}/${id}`); 
-    return r.ok ? r.data : null; 
-  }
-  async function createUser(name){
-    const r = await req(MOCK_URL, {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ name, balance: 1000, key: SECRET_KEY })
-    });
-    return r.ok ? r.data : null;
-  }
-
-  async function saveBalance(){
-    if(!currentUser?.id) return;
-    await req(`${MOCK_URL}/${currentUser.id}`, {
-      method:"PUT",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        name: currentUser.name,
-        balance: toInt(currentUser.balance,0),
-        key: SECRET_KEY
-      })
-    });
-  }
-
+  const toInt = (x, d=0) => Number.isFinite(+x) ? Math.trunc(+x) : d;
 
   function updateBalanceUI(){
     $bal.textContent = toInt(currentUser?.balance, 0);
     $bal.parentElement.classList.add("shine");
     setTimeout(()=> $bal.parentElement.classList.remove("shine"), 600);
   }
+
   function openCasino(){
     $auth.classList.add("hidden");
     $casino.classList.remove("hidden");
-    document.querySelector('[data-tab="tab-slots"]').click();
     $user.textContent = currentUser.name;
     updateBalanceUI();
   }
 
-  /* ====== Auth ====== */
   document.getElementById("loginBtn").addEventListener("click", async ()=>{
     const nick = $nick.value.trim();
     if(!nick){ $authMsg.textContent="Введите ник"; return; }
+
     $authMsg.textContent="Проверяем…";
-    let u = await findUserByName(nick);
-    if (!u){
+    let res = await fetch(`${API_URL}/api/findUser`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: nick })
+    });
+    const find = await res.json();
+    let u = find.user;
+
+    if(!u){
       $authMsg.textContent="Создаём аккаунт…";
-      u = await createUser(nick);
+      const r = await fetch(`${API_URL}/api/createUser`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nick })
+      });
+      const data = await r.json();
+      u = data.user;
       if(!u){ $authMsg.textContent="Ошибка сервера"; return; }
     }
-    currentUser = { id: u.id, name: u.name, balance: toInt(u.balance,1000) };
+
+    currentUser = { id: u.id, name: u.name, balance: toInt(u.balance, 1000) };
     localStorage.setItem("uid", u.id);
-    $authMsg.textContent="Готово!";
     openCasino();
   });
 
-  /* ====== Auto-login ====== */
-  (async()=>{
-    const uid = localStorage.getItem("uid");
-    if(uid){
-      const u = await getUserById(uid);
-      if(u){
-        currentUser = { id: u.id, name: u.name, balance: toInt(u.balance,1000) };
-        openCasino();
-      }
-      else localStorage.removeItem("uid");
-    }
-  })();
-
-  /* ====== Auto-sync ====== */
-  setInterval(async()=>{
-    if(!currentUser?.id) return;
-    const u = await getUserById(currentUser.id);
-    if(u && u.balance !== currentUser.balance){
-      currentUser.balance = u.balance;
-      updateBalanceUI();
-    }
-  }, 8000);
-
-  /* ====== Logout ====== */
-  document.getElementById("logoutBtn").addEventListener("click", ()=> {
+  document.getElementById("logoutBtn").addEventListener("click", ()=>{
     localStorage.removeItem("uid");
     location.reload();
   });
 
-  /* ====== Tabs ====== */
+  /* ====== TABS ====== */
   document.querySelectorAll(".tab-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
-      btn.classList.add("active");
       document.querySelectorAll("section.card").forEach(s=>s.classList.add("hidden"));
+      btn.classList.add("active");
       document.getElementById(btn.dataset.tab).classList.remove("hidden");
     });
   });
 
-  /* ====== SLOTS ====== */
+  /* ====== 🎰 СЛОТЫ ====== */
   const symbols = ["🍒","🍋","⭐","🔔","🍀","7️⃣","💎","🍉"];
   const $reels = document.getElementById("reels");
   const slotMsg = document.getElementById("slotMsg");
-  const SPIN_TIME = 1000; // ms
-
   function buildReel(){
-    const reel = document.createElement("div");
-    reel.className = "reel";
-    const strip = document.createElement("div");
-    strip.className = "strip";
-    // длинная лента, чтобы было что крутить
+    const reel=document.createElement("div");reel.className="reel";
+    const strip=document.createElement("div");strip.className="strip";
     for(let i=0;i<30;i++){
-      const c=document.createElement("div");
-      c.className="cell";
-      c.textContent = symbols[Math.floor(Math.random()*symbols.length)];
+      const c=document.createElement("div");c.className="cell";
+      c.textContent=symbols[Math.floor(Math.random()*symbols.length)];
       strip.appendChild(c);
     }
-    reel.appendChild(strip);
-    return reel;
+    reel.appendChild(strip);return reel;
   }
-  function initSlotsUI(){
-    $reels.innerHTML="";
-    for(let i=0;i<5;i++) $reels.appendChild(buildReel());
+  for(let i=0;i<5;i++)$reels.appendChild(buildReel());
+  function spinReelTo(reel,sym){
+    const strip=reel.firstChild,cells=Array.from(strip.children);
+    const cellH=120,targetY=-(Math.random()*cells.length*cellH);
+    strip.style.transition=`transform 1s cubic-bezier(.2,.7,.2,1)`;
+    strip.style.transform=`translateY(${targetY}px)`;
   }
-  initSlotsUI();
-
-  function spinReelTo(reel, symbol){
-    // найдём индекс ближайшего появления символа в нижних 10 ячейках, чтобы остановить красиво
-    const strip = reel.firstChild;
-    const cells = Array.from(strip.children);
-    let targetIndex = -1;
-    for (let i=cells.length-10;i<cells.length;i++){
-      if (cells[i].textContent === symbol){ targetIndex = i; break; }
-    }
-    if (targetIndex === -1) targetIndex = cells.length - 1; // если вдруг не нашли
-    const cellH = 120; // высота .cell в десктопе; на мобиле ниже, но transition визуально ок
-    const targetY = -(targetIndex * cellH - 2*cellH); // останавливаем так, чтобы нужная оказалась во 2-й ячейке (центр)
-    strip.style.transition = `transform ${SPIN_TIME}ms cubic-bezier(.2,.7,.2,1)`;
-    strip.style.transform = `translateY(${targetY}px)`;
-  }
-
-  document.getElementById("spin").addEventListener("click", async ()=>{
-    if(!currentUser) return;
-    const COST = 100;
-    if (currentUser.balance < COST){ slotMsg.textContent="Недостаточно средств"; return; }
-
-    // считаем выигрыш (RTP около 95%)
-    const r = Math.random();
-    let win = 0;
-    if (r < 0.06) win = 800;       // 6%
-    else if (r < 0.22) win = 200;  // 16%
-    const resultSymbols = [];
-    for(let i=0;i<5;i++){
-      // Итоговый ряд: если выигрыш крупный — больше 💎/7️⃣, иначе рандом
-      const pool = win>=800 ? ["💎","7️⃣","🍀","⭐"] : symbols;
-      resultSymbols.push(pool[Math.floor(Math.random()*pool.length)]);
-    }
-
-    // запускаем анимацию каждого барабана к своему символу результата
-    Array.from($reels.children).forEach((reel,i)=>{
-      // перед каждым новым спином сбрасываем transform
-      const strip = reel.firstChild;
-      strip.style.transition="none";
-      strip.style.transform="translateY(0)";
-      // запускаем с небольшим смещением во времени
-      setTimeout(()=> spinReelTo(reel, resultSymbols[i]), i*120);
-    });
-
-    // блокируем повторный клик на время спина
-    const btn = document.getElementById("spin");
-    btn.disabled = true;
-    slotMsg.textContent = "Крутим…";
-
-    setTimeout(async ()=>{
-      currentUser.balance = toInt(currentUser.balance - COST + win, 0);
-      updateBalanceUI(); await saveBalance();
-      slotMsg.textContent = win ? ("🎉 Выигрыш +" + win) : "Проигрыш";
-      btn.disabled = false;
-    }, SPIN_TIME + 200);
+  document.getElementById("spin").addEventListener("click", async()=>{
+    if(!currentUser)return;
+    if(currentUser.balance<100){slotMsg.textContent="Недостаточно средств";return;}
+    currentUser.balance-=100;updateBalanceUI();
+    Array.from($reels.children).forEach((r,i)=>setTimeout(()=>spinReelTo(r,""),i*100));
+    slotMsg.textContent="Крутим…";
+    setTimeout(()=>{
+      const win=Math.random()<0.2?400:0;
+      currentUser.balance+=win;
+      updateBalanceUI();
+      slotMsg.textContent=win?`🎉 Выигрыш +${win}`:"Проигрыш";
+    },1300);
   });
 
-  /* ====== BLACKJACK ====== */
-  const SUITS=["♠","♥","♦","♣"];
-  const RANKS=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
-  const $pHand=document.getElementById("playerHand");
-  const $dHand=document.getElementById("dealerHand");
-  const $bjMsg=document.getElementById("bjMsg");
-  const $bjStart=document.getElementById("bjStart");
-  const $hit=document.getElementById("hit");
-  const $stand=document.getElementById("stand");
-  let BJ = null; // {deck, player, dealer, active}
-
-  const freshDeck = ()=>{
-    const d=[]; for(const s of SUITS) for(const r of RANKS) d.push(r+s);
-    for(let i=d.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [d[i],d[j]]=[d[j],d[i]]; }
-    return d;
+  /* ====== 🃏 БЛЭКДЖЕК ====== */
+  const $pHand=document.getElementById("playerHand"),$dHand=document.getElementById("dealerHand"),
+  $bjMsg=document.getElementById("bjMsg"),$bjStart=document.getElementById("bjStart"),
+  $hit=document.getElementById("hit"),$stand=document.getElementById("stand");
+  const SUITS=["♠","♥","♦","♣"],RANKS=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+  const freshDeck=()=>{const d=[];for(const s of SUITS)for(const r of RANKS)d.push(r+s);return d.sort(()=>Math.random()-0.5)};
+  const cardVal=c=>{const r=c.slice(0,-1);return r==="A"?11:["J","Q","K"].includes(r)?10:+r;};
+  const total=h=>{let t=h.reduce((a,c)=>a+cardVal(c),0),a=h.filter(c=>c.startsWith("A")).length;while(t>21&&a){t-=10;a--;}return t;};
+  function renderBJ(p,d,hide=true){$pHand.innerHTML="";$dHand.innerHTML="";
+    p.forEach(c=>{$pHand.innerHTML+=`<div class='card-face'>${c}</div>`});
+    (hide?[d[0],"🂠"]:d).forEach(c=>{$dHand.innerHTML+=`<div class='card-face'>${c}</div>`});
+  }
+  let BJ=null;
+  $bjStart.onclick=async()=>{
+    if(currentUser.balance<200){$bjMsg.textContent="Недостаточно средств";return;}
+    currentUser.balance-=200;updateBalanceUI();
+    const deck=freshDeck(),player=[deck.pop(),deck.pop()],dealer=[deck.pop(),deck.pop()];
+    BJ={deck,player,dealer,bet:200,active:true};renderBJ(player,dealer);
+    $hit.disabled=false;$stand.disabled=false;$bjMsg.textContent="Ваш ход";
   };
-  const cardVal = c => { const r=c.slice(0,-1); if(r==="A")return 11; if(["J","Q","K"].includes(r))return 10; return Number(r); };
-  const total = hand => { let t=hand.reduce((a,c)=>a+cardVal(c),0), aces=hand.filter(c=>c.startsWith("A")).length; while(t>21&&aces){t-=10;aces--;} return t; };
+  $hit.onclick=()=>{
+    if(!BJ||!BJ.active)return;
+    BJ.player.push(BJ.deck.pop());renderBJ(BJ.player,BJ.dealer);
+    if(total(BJ.player)>21){BJ.active=false;$bjMsg.textContent="Перебор!";$hit.disabled=$stand.disabled=true;}
+  };
+  $stand.onclick=async()=>{
+    if(!BJ||!BJ.active)return;
+    while(total(BJ.dealer)<17)BJ.dealer.push(BJ.deck.pop());
+    renderBJ(BJ.player,BJ.dealer,false);
+    const pt=total(BJ.player),dt=total(BJ.dealer);
+    let win=0;if(pt<=21&&(dt>21||pt>dt))win=BJ.bet*2;else if(pt===dt)win=BJ.bet;
+    currentUser.balance+=win;updateBalanceUI();
+    $bjMsg.textContent=win?`Победа +${win-BJ.bet}`:"Проигрыш";
+    $hit.disabled=$stand.disabled=true;BJ.active=false;
+  };
 
-  function cardEl(card){
-    if(card==="🂠"){
-      const d=document.createElement("div"); d.className="card-face";
-      d.style.background="#1b2442"; d.style.borderColor="rgba(255,255,255,.2)"; d.style.color="#1b2442";
-      d.innerHTML='<div class="rank">?</div><div class="suit">?</div>'; return d;
-    }
-    const r=card.slice(0,-1), s=card.slice(-1);
-    const d=document.createElement("div"); d.className="card-face"+((s==="♥"||s==="♦")?" red":"");
-    d.innerHTML='<div class="rank">'+r+'</div><div class="suit">'+s+'</div>'; return d;
-  }
-  function renderBJ(player, dealer, hideHole=true){
-    $pHand.innerHTML=""; $dHand.innerHTML="";
-    player.forEach(c=> $pHand.appendChild(cardEl(c)));
-    (hideHole? [dealer[0],"🂠"] : dealer).forEach(c=> $dHand.appendChild(cardEl(c)));
-  }
-
-  $bjStart.addEventListener("click", async ()=>{
-    if(!currentUser) return;
-    const BET=200;
-    if (currentUser.balance < BET){ $bjMsg.textContent="Недостаточно средств"; return; }
-    currentUser.balance -= BET; updateBalanceUI(); await saveBalance();
-
-    const deck=freshDeck(), player=[deck.pop(),deck.pop()], dealer=[deck.pop(),deck.pop()];
-    BJ={deck,player,dealer,bet:BET,active:true};
-    renderBJ(player, dealer, true);
-    $bjMsg.textContent="Ваш ход"; $hit.disabled=false; $stand.disabled=false;
-  });
-
-  $hit.addEventListener("click", ()=>{
-    if(!BJ?.active) return;
-    BJ.player.push(BJ.deck.pop());
-    renderBJ(BJ.player, BJ.dealer, true);
-    const pt=total(BJ.player);
-    if(pt>21){
-      $bjMsg.textContent="Перебор! Проигрыш.";
-      $hit.disabled=true; $stand.disabled=true; BJ.active=false;
-    }
-  });
-
-  $stand.addEventListener("click", async ()=>{
-    if(!BJ?.active) return;
-    while(total(BJ.dealer) < 17) BJ.dealer.push(BJ.deck.pop());
-    const pt=total(BJ.player), dt=total(BJ.dealer);
-    renderBJ(BJ.player, BJ.dealer, false);
-
-    let win=0;
-    if (pt<=21 && (dt>21 || pt>dt)) win = BJ.bet*2;   // 400
-    else if (pt===dt) win = BJ.bet;                   // 200 (push)
-
-    if (win){
-      currentUser.balance = toInt(currentUser.balance + win, 0);
-      updateBalanceUI(); await saveBalance();
-    }
-    $bjMsg.textContent = win ? ("Победа! +" + (win - BJ.bet)) : "Проигрыш";
-    $hit.disabled=true; $stand.disabled=true; BJ.active=false;
-  });
-
-  /* ====== ROULETTE ====== */
+  /* ====== 🎡 РУЛЕТКА ====== */
   const order=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
   const reds=new Set([32,19,21,25,34,27,36,30,23,5,16,1,14,9,18,7,12,3]);
-  const seg=360/order.length;
-  const $wheel=document.getElementById("wheel");
-  const $roulMsg=document.getElementById("roulMsg");
-  const $pickColor=document.getElementById("pickColor");
-  const $spinRoulette=document.getElementById("spinRoulette");
-  const $pointer=document.getElementById("pointer");
+  const seg=360/order.length,$wheel=document.getElementById("wheel"),$pointer=document.getElementById("pointer"),
+  $roulMsg=document.getElementById("roulMsg"),$pickColor=document.getElementById("pickColor");
+  document.getElementById("spinRoulette").onclick=async()=>{
+    if(currentUser.balance<150){$roulMsg.textContent="Недостаточно средств";return;}
+    currentUser.balance-=150;updateBalanceUI();
+    const idx=Math.floor(Math.random()*order.length),num=order[idx],color=num===0?"green":reds.has(num)?"red":"black";
+    const pick=$pickColor.value,win=(pick===color)?(color==="green"?1500:300):0;
+    $wheel.style.transition="transform 3s ease-out";$wheel.style.transform=`rotate(${360-(idx*seg)}deg)`;
+    setTimeout(()=>{currentUser.balance+=win;updateBalanceUI();
+      $roulMsg.textContent=`Выпало ${num} (${color}). ${win?"Выигрыш +"+win:"Проигрыш"}`;},3200);
+  };
 
-  function spinToAngle(angle){
-    const turns=6+Math.floor(Math.random()*4);
-    const rot=turns*360 + angle;
-    $wheel.style.transition="transform 3.2s cubic-bezier(.18,.75,.2,1)";
-    $wheel.style.transform="rotate("+rot+"deg)";
+  /* ====== 💣 МИНЫ ====== */
+  const $grid=document.getElementById("minesGrid"),$mMsg=document.getElementById("minesMsg"),
+  $bet=document.getElementById("minesBet"),$count=document.getElementById("minesCount"),
+  $mStart=document.getElementById("minesStart"),$cash=document.getElementById("minesCashout");
+  const GRID=25;let mines=new Set(),opened=new Set(),mActive=false,bet=0;
+  function resetGrid(){ $grid.innerHTML="";for(let i=0;i<GRID;i++){const c=document.createElement("button");
+    c.className="mine-cell";c.textContent="?";c.onclick=()=>reveal(i,c);$grid.appendChild(c);} }
+  resetGrid();
+  function genMines(n){const s=new Set();while(s.size<n)s.add(Math.floor(Math.random()*GRID));return s;}
+  $mStart.onclick=()=>{
+    bet=+ $bet.value;const n=Math.min(24,+$count.value);
+    if(currentUser.balance<bet){$mMsg.textContent="Недостаточно средств";return;}
+    currentUser.balance-=bet;updateBalanceUI();mines=genMines(n);opened.clear();mActive=true;
+    $cash.disabled=true;$mMsg.textContent="Игра началась!";resetGrid();
+  };
+  function reveal(i,el){
+    if(!mActive||opened.has(i))return;
+    if(mines.has(i)){el.textContent="💣";$mMsg.textContent="Мина!";mActive=false;
+      document.querySelectorAll(".mine-cell").forEach((b,j)=>{if(mines.has(j))b.textContent="💣";b.disabled=true;});return;}
+    el.textContent="💎";opened.add(i);$cash.disabled=false;
+    const p=bet+opened.size*bet*0.2;$mMsg.textContent=`Профит: +${Math.round(p-bet)}`;
   }
+  $cash.onclick=()=>{if(!mActive)return;mActive=false;
+    const profit=bet+opened.size*bet*0.2;currentUser.balance+=Math.round(profit);
+    updateBalanceUI();$mMsg.textContent="Забрал "+Math.round(profit-bet);};
 
-  $spinRoulette.addEventListener("click", async ()=>{
-    if(!currentUser) return;
-    const COST=150;
-    if (currentUser.balance < COST){ $roulMsg.textContent="Недостаточно средств"; return; }
-    $spinRoulette.disabled = true;
-    $roulMsg.textContent="Вращение…";
-
-    const idx = Math.floor(Math.random()*order.length);
-    const num = order[idx];
-    const color = (num===0) ? "green" : (reds.has(num) ? "red" : "black");
-    const pick = $pickColor.value;
-    const win = (pick===color) ? (color==="green" ? 1500 : 300) : 0;
-
-    spinToAngle(360-(idx*seg+seg/2));
-
-    setTimeout(async ()=>{
-      currentUser.balance = toInt(currentUser.balance - COST + win, 0);
-      updateBalanceUI(); await saveBalance();
-      $pointer.classList.add("pointer-tick"); setTimeout(()=> $pointer.classList.remove("pointer-tick"), 500);
-      $roulMsg.textContent = "Выпало "+num+" ("+color+"). " + (win?("Выигрыш +"+win):"Проигрыш.");
-      $spinRoulette.disabled = false;
-    }, 3300);
-  });
-
-  /* ====== MINES ====== */
-  const GRID=25;
-  const $minesGrid=document.getElementById("minesGrid");
-  const $minesMsg=document.getElementById("minesMsg");
-  const $minesBet=document.getElementById("minesBet");
-  const $minesCount=document.getElementById("minesCount");
-  const $minesStart=document.getElementById("minesStart");
-  const $minesCash=document.getElementById("minesCashout");
-  let mines=null, opened=new Set(), active=false, startBet=0;
-
-  function resetMinesUI(){
-    $minesGrid.innerHTML="";
-    for(let i=0;i<GRID;i++){
-      const cell=document.createElement("button");
-      cell.className="mine-cell"; cell.textContent="?"; cell.dataset.idx=i; cell.disabled=true;
-      cell.addEventListener("click", ()=>onReveal(i, cell));
-      $minesGrid.appendChild(cell);
-    }
-    $minesMsg.textContent="—"; $minesCash.disabled=true;
-  }
-  resetMinesUI();
-
-  function randomSet(count){ const s=new Set(); while(s.size<count) s.add(Math.floor(Math.random()*GRID)); return s; }
-  function enableGrid(v){ Array.from($minesGrid.children).forEach(c=> c.disabled=!v); }
-  function showAllMines(){ Array.from($minesGrid.children).forEach((c,i)=>{ if(mines.has(i)){ c.classList.add("boom"); c.textContent="💣"; } c.disabled=true; }); }
-
-  function currentPayout(){
-    // простая “честная” формула: каждая безопасная клетка повышает множитель ~ по обратной вероятности с маржой
-    const m = toInt($minesCount.value,5);
-    const safeLeft = (GRID - m) - opened.size;
-    const cellsLeft = GRID - opened.size;
-    const pSafe = Math.max(0.01, safeLeft / Math.max(1, cellsLeft));
-    const stepMult = Math.max(1.02, (1/pSafe)*0.95);
-    const total = Math.floor(startBet * Math.pow(stepMult, opened.size));
-    return { total, profit: total - startBet };
-  }
-
-  $minesStart.addEventListener("click", async ()=>{
-    if(!currentUser) return;
-    const bet = toInt($minesBet.value,100);
-    const count = Math.max(1, Math.min(24, toInt($minesCount.value,5)));
-    if (currentUser.balance < bet){ $minesMsg.textContent="Недостаточно средств"; return; }
-    currentUser.balance -= bet; updateBalanceUI(); await saveBalance();
-
-    startBet = bet;
-    mines = randomSet(count);
-    opened.clear();
-    active = true;
-    enableGrid(true);
-    Array.from($minesGrid.children).forEach(c=>{ c.classList.remove("revealed","boom"); c.textContent="?"; });
-    $minesMsg.textContent="Игра началась!"; $minesCash.disabled=true;
-  });
-
-  async function onReveal(i, el){
-    if(!active) return;
-    if (opened.has(i)) return;
-
-    if (mines.has(i)){
-      active = false;
-      showAllMines();
-      $minesMsg.textContent="💥 Мина! Ставка проиграна.";
-      $minesCash.disabled = true;
-    } else {
-      opened.add(i);
-      el.classList.add("revealed"); el.textContent="💎"; el.disabled=true;
-      const { profit } = currentPayout();
-      $minesMsg.textContent="Безопасно! Профит: +" + profit;
-      $minesCash.disabled = false;
-
-      if (opened.size >= (GRID - mines.size)){
-        // все безопасные открыты — автокэш-аут
-        await cashout(true);
+  /* ====== 🚀 CRASH ====== */
+  const $crashBet=document.getElementById("crashBet"),$crashStart=document.getElementById("crashStart"),
+  $crashCash=document.getElementById("crashCashout"),$crashMult=document.getElementById("crashMult"),
+  $crashStatus=document.getElementById("crashStatus");
+  let crashActive=false,crashMult=1,crashTimer=null,crashPoint=0;
+  function randPoint(){return(Math.random()**2.2)*10+1.05;}
+  $crashStart.onclick=()=>{
+    const bet=+ $crashBet.value;if(currentUser.balance<bet){$crashStatus.textContent="Недостаточно средств";return;}
+    currentUser.balance-=bet;updateBalanceUI();
+    crashActive=true;crashMult=1;crashPoint=randPoint();
+    $crashStart.disabled=true;$crashCash.disabled=false;$crashStatus.textContent="🚀 Полёт!";
+    crashTimer=setInterval(()=>{
+      crashMult=+(crashMult*1.015).toFixed(2);
+      $crashMult.textContent=`×${crashMult.toFixed(2)}`;
+      if(crashMult>=crashPoint){
+        clearInterval(crashTimer);crashActive=false;
+        $crashCash.disabled=true;$crashStart.disabled=false;
+        $crashMult.textContent="💥 КРАШ";$crashStatus.textContent=`Проигрыш ×${crashPoint.toFixed(2)}`;
       }
-    }
-  }
-
-  async function cashout(auto){
-    if(!active || opened.size===0) return;
-    const { total, profit } = currentPayout();
-    currentUser.balance = toInt(currentUser.balance + total, 0);
-    updateBalanceUI(); await saveBalance();
-    active = false; enableGrid(false);
-    $minesCash.disabled = true;
-    $minesMsg.textContent = (auto?"Все безопасные клетки открыты! ":"") + "Забрал +" + profit + ". Итог: " + total + ".";
-  }
-  $minesCash.addEventListener("click", ()=> cashout(false));
-  /* ====== CRASH ====== */
-const $crashBet=document.getElementById("crashBet");
-const $crashStart=document.getElementById("crashStart");
-const $crashCashout=document.getElementById("crashCashout");
-const $crashMult=document.getElementById("crashMult");
-const $crashStatus=document.getElementById("crashStatus");
-let crashActive=false, crashTimer=null, crashMult=1.0, crashCrashPoint=0;
-
-function randCrashPoint(){return (Math.random()**2.2)*10+1.05;}
-function resetCrashUI(){
-  crashActive=false;
-  clearInterval(crashTimer);
-  $crashMult.textContent="×1.00";
-  $crashCashout.disabled=true;
-  $crashStart.disabled=false;
-}
-
-$crashStart.addEventListener("click",async()=>{
-  if(!currentUser)return;
-  const bet=toInt($crashBet.value,100);
-  if(currentUser.balance<bet){$crashStatus.textContent="Недостаточно средств";return;}
-  currentUser.balance-=bet;await saveBalance();updateBalanceUI();
-  crashActive=true;crashMult=1.0;crashCrashPoint=randCrashPoint();
-  $crashStart.disabled=true;$crashCashout.disabled=false;
-  $crashStatus.textContent="🚀 Полёт начался!";
-
-  crashTimer=setInterval(()=>{
-    if(!crashActive)return;
-    crashMult=+(crashMult*1.015).toFixed(2);
-    $crashMult.textContent="×"+crashMult.toFixed(2);
-    if(crashMult>=crashCrashPoint){
-      clearInterval(crashTimer);crashActive=false;
-      $crashCashout.disabled=true;$crashStart.disabled=false;
-      $crashMult.textContent="💥 КРАШ";
-      $crashStatus.textContent="Проигрыш ×"+crashCrashPoint.toFixed(2);
-    }
-  },150);
-});
-
-$crashCashout.addEventListener("click",async()=>{
-  if(!crashActive)return;
-  crashActive=false;clearInterval(crashTimer);
-  const bet=toInt($crashBet.value,100);
-  const win=Math.floor(bet*crashMult);
-  currentUser.balance+=win;
-  await saveBalance();updateBalanceUI();
-  $crashCashout.disabled=true;$crashStart.disabled=false;
-  $crashStatus.textContent=`✅ Забрал ×${crashMult.toFixed(2)} = +${win}`;
-});
-
+    },150);
+  };
+  $crashCash.onclick=()=>{
+    if(!crashActive)return;clearInterval(crashTimer);crashActive=false;
+    const bet=+$crashBet.value,win=Math.floor(bet*crashMult);
+    currentUser.balance+=win;updateBalanceUI();
+    $crashCash.disabled=true;$crashStart.disabled=false;
+    $crashStatus.textContent=`✅ Забрал ×${crashMult.toFixed(2)} = +${win}`;
+  };
   </script>
 </body>
 </html>
