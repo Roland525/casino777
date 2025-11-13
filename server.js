@@ -17,7 +17,13 @@ const __dirname = path.dirname(__filename);
 
 /* ===== MIDDLEWARE ===== */
 app.use(cors({
-  origin: ["https://casino777.onrender.com", "http://localhost:5500"],
+  origin: [
+    "https://casino777.onrender.com",
+    "http://localhost:5500",
+    "http://localhost:3000",
+    "http://127.0.0.1:5500",
+    "http://127.0.0.1:3000"
+  ],
   methods: ["GET", "POST", "PUT", "OPTIONS"],
   allowedHeaders: ["Content-Type"]
 }));
