@@ -1,14 +1,25 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
+import crypto from "crypto";
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
+// === ТВОЙ MockAPI ===
 const MOCK_URL = "https://69147b693746c71fe0486c2c.mockapi.io/users";
 
-/* ========== Вспомогательные функции ========== */
+// === 🔒 Простая защита API (секретный токен между фронтом и сервером) ===
+const API_KEY = process.env.API_KEY || "LuckySecret777"; // добавь ENV в Render
+
+function checkKey(req, res, next) {
+  const key = req.headers["x-api-key"];
+  if (key !== API_KEY) return res.status(403).json({ ok: false, error: "Доступ запрещён" });
+  next();
+}
+
+// ====== Утилиты ======
 async function safeFetch(url, options = {}) {
   const res = await fetch(url, {
     ...options,
@@ -42,9 +53,7 @@ async function updateBalance(id, name, balance) {
   });
 }
 
-/* ========== API ========== */
-
-// Проверка связи
+// ====== API ======
 app.get("/api/test", async (req, res) => {
   try {
     const users = await safeFetch(MOCK_URL);
@@ -54,57 +63,60 @@ app.get("/api/test", async (req, res) => {
   }
 });
 
-// Регистрация
-app.post("/api/register", async (req, res) => {
+// 🔐 Всё важное — только с API ключом
+app.post("/api/register", checkKey, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ ok: false, error: "Нет имени" });
 
-    const existing = await getUserByName(name);
-    if (existing) return res.json({ ok: false, error: "Имя занято" });
+    const exist = await getUserByName(name);
+    if (exist) return res.json({ ok: false, error: "Имя занято" });
 
     const user = await createUser(name);
     res.json({ ok: true, user });
   } catch (e) {
-    console.error("Register error:", e.message);
+    console.error("register:", e);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// Вход
-app.post("/api/login", async (req, res) => {
+app.post("/api/login", checkKey, async (req, res) => {
   try {
     const { name } = req.body;
-    if (!name) return res.status(400).json({ ok: false, error: "Нет имени" });
-
     const user = await getUserByName(name);
     if (!user) return res.status(404).json({ ok: false, error: "Пользователь не найден" });
-
     res.json({ ok: true, user });
   } catch (e) {
-    console.error("Login error:", e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// Обновление баланса
-app.put("/api/balance", async (req, res) => {
+app.put("/api/balance", checkKey, async (req, res) => {
   try {
     const { id, name, balance } = req.body;
     if (!id) return res.status(400).json({ ok: false, error: "Нет ID" });
-
     const updated = await updateBalance(id, name, balance);
     res.json({ ok: true, user: updated });
   } catch (e) {
-    console.error("Balance error:", e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// 🚫 Блокируем удаление
+// 🚫 Защита от удаления пользователей
 app.delete("*", (req, res) => {
   res.status(403).json({ ok: false, error: "Удаление запрещено" });
 });
 
+// === Anti-DDoS ограничение ===
+let recentIPs = new Map();
+app.use((req, res, next) => {
+  const ip = req.ip;
+  const now = Date.now();
+  const last = recentIPs.get(ip) || 0;
+  if (now - last < 700) return res.status(429).json({ ok: false, error: "Слишком часто" });
+  recentIPs.set(ip, now);
+  next();
+});
+
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Lucky Box сервер запущен на порту ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Lucky Box сервер запущен на ${PORT}`));
