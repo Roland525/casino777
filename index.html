@@ -160,33 +160,51 @@
     }
   };
 
-  async function findUserByName(name){
-    const q = await req(`${MOCK_URL}?name=${encodeURIComponent(name)}`);
-    if (q.ok && Array.isArray(q.data)) return q.data[0] || null;
-    const all = await req(MOCK_URL); // fallback
-    if (all.ok && Array.isArray(all.data)){
-      return all.data.find(u => String(u?.name||"").trim() === String(name).trim()) || null;
+  async function findUserByName(name) {
+    // добавляем секретный ключ в запрос
+    const q = await req(`${MOCK_URL}?name=${encodeURIComponent(name)}&key=${SECRET_KEY}`);
+    
+    if (q.ok && Array.isArray(q.data)) 
+      return q.data[0] || null;
+
+    // fallback — если MockAPI не принимает фильтр, запрашиваем всех пользователей, но тоже с ключом
+    const all = await req(`${MOCK_URL}?key=${SECRET_KEY}`);
+    
+    if (all.ok && Array.isArray(all.data)) {
+      return all.data.find(u => 
+        String(u?.name || "").trim() === String(name).trim()
+      ) || null;
     }
+
     return null;
   }
+
   async function getUserById(id){ 
     const r = await req(`${MOCK_URL}/${id}`); 
     return r.ok ? r.data : null; 
   }
   async function createUser(name){
     const r = await req(MOCK_URL, {
-      method:"POST", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ name, balance: 1000 })
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ name, balance: 1000, key: SECRET_KEY })
     });
     return r.ok ? r.data : null;
   }
+
   async function saveBalance(){
     if(!currentUser?.id) return;
     await req(`${MOCK_URL}/${currentUser.id}`, {
-      method:"PUT", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ name: currentUser.name, balance: toInt(currentUser.balance,0) })
+      method:"PUT",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        name: currentUser.name,
+        balance: toInt(currentUser.balance,0),
+        key: SECRET_KEY
+      })
     });
   }
+
 
   function updateBalanceUI(){
     $bal.textContent = toInt(currentUser?.balance, 0);
