@@ -149,6 +149,10 @@
     }
     return null;
   }
+  async function getUserById(id){ 
+    const r = await req(`${MOCK_URL}/${id}`); 
+    return r.ok ? r.data : null; 
+  }
   async function createUser(name){
     const r = await req(MOCK_URL, {
       method:"POST", headers:{ "Content-Type":"application/json" },
@@ -189,10 +193,39 @@
       if(!u){ $authMsg.textContent="Ошибка сервера"; return; }
     }
     currentUser = { id: u.id, name: u.name, balance: toInt(u.balance,1000) };
+    localStorage.setItem("uid", u.id);
     $authMsg.textContent="Готово!";
     openCasino();
   });
-  document.getElementById("logoutBtn").addEventListener("click", ()=> location.reload());
+
+  /* ====== Auto-login ====== */
+  (async()=>{
+    const uid = localStorage.getItem("uid");
+    if(uid){
+      const u = await getUserById(uid);
+      if(u){
+        currentUser = { id: u.id, name: u.name, balance: toInt(u.balance,1000) };
+        openCasino();
+      }
+      else localStorage.removeItem("uid");
+    }
+  })();
+
+  /* ====== Auto-sync ====== */
+  setInterval(async()=>{
+    if(!currentUser?.id) return;
+    const u = await getUserById(currentUser.id);
+    if(u && u.balance !== currentUser.balance){
+      currentUser.balance = u.balance;
+      updateBalanceUI();
+    }
+  }, 8000);
+
+  /* ====== Logout ====== */
+  document.getElementById("logoutBtn").addEventListener("click", ()=> {
+    localStorage.removeItem("uid");
+    location.reload();
+  });
 
   /* ====== Tabs ====== */
   document.querySelectorAll(".tab-btn").forEach(btn=>{
